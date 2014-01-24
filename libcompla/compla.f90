@@ -5,6 +5,8 @@
 ! wrap lib in module so it interfaces properly
 module compla
 
+   real (kind=8), parameter :: ZERO_TOL = 10**(-10)
+
    contains
 
    !!!!!!!!!!!!!!!!!!!
@@ -13,6 +15,7 @@ module compla
    ! {{{ 
    ! These both use the outer product formulation of the Cholesky decomposition
    ! Input matrix must by symmetric, positive definite.
+   ! TODO optional input for transpose output or not
 
    ! Outer product formulation
    subroutine chol(A)
@@ -23,7 +26,7 @@ module compla
 
    ! check that A is square
    if (size(A,1) /= size(A,2)) then
-      print *, "error: libcompla.f90: chol: input matrix is not square"
+      print *, "error: compla.f90: chol: input matrix is not square"
       stop
    end if
 
@@ -35,7 +38,7 @@ module compla
    recurse: do i=1,Nc-1
       ! check a_{i,i} > 0
       if (A(i,i) <= 0d0) then
-         print *, "error: libcompla.f90: chol: input matrix is not positive definite"
+         print *, "error: compla.f90: chol: input matrix is not positive definite"
          stop
       end if
 
@@ -53,7 +56,7 @@ module compla
    end do recurse
 
    if (A(Nc,Nc) <= 0d0) then
-      print *, "error: libcompla.f90: chol: input matrix is not positive definite"
+      print *, "error: compla.f90: chol: input matrix is not positive definite"
       stop
    end if
   
@@ -83,9 +86,77 @@ module compla
    ! For/Back Solve !
    !!!!!!!!!!!!!!!!!!
    ! {{{
-   ! call back_solve()
-   ! call forward_solve()
-   ! call fbsolve()
+   subroutine back_solve(U,b)
+      real (kind=8), allocatable :: U(:,:), b(:,:)
+      integer (kind=4) :: i,j,Nc
+
+      ! call check_square(U)
+      ! call check_upper_tri(U)
+
+      Nc=size(U,1)
+
+      row: do j=Nc,1,-1
+         ! zero on diagonal
+         if (abs(U(j,j)) <= ZERO_TOL) then
+            print *, "error: compla.f90: back_solve: input matrix is singular to tolerance"
+            stop
+         end if
+
+         b(j,1) = b(j,1)/U(j,j)
+         col: do i=j-1,1,-1
+            b(i,1)=b(i,1) - U(i,j)*b(j,1)
+         end do col
+      end do row
+
+   end subroutine back_solve
+
+   subroutine for_solve(L,b)
+      real (kind=8), allocatable :: L(:,:), b(:,:)
+      integer (kind=4) :: i,j,Nc
+
+      ! call check_square(L)
+      ! call check_lower_tri(L)
+
+      Nc = size(L,1)
+
+      row: do j=1,Nc
+         ! zero on diagonal means singular matrix
+         if (abs(L(j,j)) <= ZERO_TOL) then
+            print *, "error: compla.f90: for_solve: input matrix is singular to tolerance"
+            stop
+         end if
+
+         b(j,1) = b(j,1)/L(j,j)
+         col: do i=j+1,Nc
+            b(i,1)=b(i,1) - L(i,j)*b(j,1) 
+         end do col
+      end do row
+
+   end subroutine for_solve
+   
+   subroutine fb_solve_chol(A,b,x)
+      real (kind=8), allocatable :: A(:,:), b(:,:), x(:,:)
+      real (kind=8), allocatable :: wrk(:,:)
+      integer (kind=4) :: Nr,Nc
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+   
+      if (Nr /= Nc) then
+         print *, "error: compla.f90: fb_solve_chol: input matrix is not square"
+         stop
+      end if
+
+      allocate(wrk(Nc,Nc))
+      x = b
+      wrk = A
+      call chol(wrk) ! stores R in wrk
+      wrk = transpose(wrk)
+      call for_solve(wrk, x) !A*x = R'*R*x=b -> R'*y=b
+      wrk = transpose(wrk)
+      call back_solve(wrk,x) ! Rx=y
+
+   end subroutine fb_solve_chol
 
    ! call back_solve_block()
    ! call forward_solve_block()
