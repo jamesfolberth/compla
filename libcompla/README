@@ -1,0 +1,4 @@
+
+I made a symbolic link to libcompla.so in /usr/lib (that's in the default ld path)
+
+I made a symbolic link to this directory in /usr/include so I can get at the .mod (module) files
