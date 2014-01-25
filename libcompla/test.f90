@@ -11,7 +11,7 @@ program test
    !call test_fb_solve_chol(100)
 
    ! Forward and back solve by blocks with Cholesky decomp
-   call test_fb_solve_blk_chol(20)
+   !call test_fb_solve_blk_chol(100)
   
    ! {{{
    !print *,"test: tic"
@@ -158,62 +158,57 @@ program test
          real (kind=8), allocatable :: A(:,:)
          real (kind=8), allocatable :: b(:,:), x(:,:)
 
-         real (kind=8), allocatable :: R(:,:), Rt(:,:)
+         !real (kind=8), allocatable :: R(:,:), Rt(:,:)
 
          A = rand_spd_mat(N)
          b = rand_mat(N,1)
+         x = b ! just allocating x
 
-         ! manual test of for_solve(), back_solve()
+         ! manual test of for_solve_blk(), back_solve_blk()
          ! {{{
-         if (allocated(R)) deallocate(R)
-         if (allocated(Rt)) deallocate(R)
-         allocate(R(size(A,1),size(A,2)))
-         allocate(Rt(size(A,1),size(A,2)))
-         R = A
-         call chol(R)
-         Rt = transpose(R)
+         !if (allocated(R)) deallocate(R)
+         !if (allocated(Rt)) deallocate(R)
+         !allocate(R(size(A,1),size(A,2)))
+         !allocate(Rt(size(A,1),size(A,2)))
+         !R = A
+         !call chol(R)
+         !Rt = transpose(R)
      
+         !!x=b
+         !!call for_solve_blk(Rt,x)
+         !!x = matmul(Rt,x)-b
+
+         !!print *,
+         !!print *, "Testing for_solve_blk:"
+         !!print *, "Number of rows: ",N
+         !!print *, "2-norm of residual vector = ", norm_f(x)
+         !!!call print_array(x)
+
          !x=b
-         !call for_solve_blk(Rt,x)
-         !!call print_array(x)
-         !x = matmul(Rt,x)-b
+         !call back_solve_blk(R,x)
+         !x = matmul(R,x)-b
 
          !print *,
-         !print *, "Testing for_solve_blk:"
+         !print *, "Testing back_solve_blk:"
          !print *, "Number of rows: ",N
          !print *, "2-norm of residual vector = ", norm_f(x)
          !!call print_array(x)
 
-         x=b
-         call back_solve_blk(R,x)
-         !call print_array(x)
-         x = matmul(Rt,x)-b
-
-         print *,
-         print *, "Testing back_solve_blk:"
-         print *, "Number of rows: ",N
-         print *, "2-norm of residual vector = ", norm_f(x)
-         call print_array(x)
-
-         
-         !print *,
-         !call back_solve(R,b)
-         !call print_array(b)
-         deallocate(A,R,Rt,b,x) 
+         !deallocate(A,R,Rt,b,x) 
          ! }}}
       
-         !call fb_solve_chol(A,b,x)
-         !!call print_array(x)
+         call fb_solve_blk_chol(A,b,x)
+         !call print_array(x)
       
-         !x = matmul(A,x)-b
+         x = matmul(A,x)-b
        
-         !print *,
-         !print *, "Testing fb_solve_blk_chol:"
-         !print *, "Number of rows: ",N
-         !print *, "2-norm of residual vector = ", norm_f(x)
-         !!call print_array(x)
+         print *,
+         print *, "Testing fb_solve_blk_chol:"
+         print *, "Number of rows: ",N
+         print *, "2-norm of residual vector = ", norm_f(x)
+         !call print_array(x)
 
-         !deallocate(A,b,x)
+         deallocate(A,b,x)
 
       end subroutine test_fb_solve_blk_chol
       ! }}}

@@ -19,7 +19,7 @@ module compla
 
    ! Outer product formulation
    subroutine chol(A)
-   real (kind=8), allocatable :: A(:,:)
+   real (kind=8) :: A(:,:)
 
    integer (kind=4) :: i,j,k,Nc
    real (kind=8), allocatable :: b(:,:)
@@ -87,7 +87,7 @@ module compla
    !!!!!!!!!!!!!!!!!!
    ! {{{
    subroutine back_solve(U,b)
-      real (kind=8), allocatable :: U(:,:), b(:,:)
+      real (kind=8) :: U(:,:), b(:,:)
       integer (kind=4) :: i,j,Nc
 
       ! call check_square(U)
@@ -111,10 +111,11 @@ module compla
    end subroutine back_solve
 
    subroutine back_solve_blk(U,b)
-      real (kind=8), allocatable :: U(:,:), b(:,:)
+      real (kind=8) :: U(:,:), b(:,:)
 
-      integer (kind=4), parameter :: blk_size=8
+      integer (kind=4), parameter :: blk_size=4
       integer (kind=4) :: i,j,s,Nc
+      integer (kind=4) :: il, ih, jl, jh
 
       ! call check_square(U)
       ! call check_upper_tri(U)
@@ -123,25 +124,63 @@ module compla
       s = Nc / blk_size
 
       ! Column oriented backward substitution
-      blk: do j=s,2,-1
-         if (j<s) then
-            col_blk: do i=
+      blk: do j=1,s
+         if (j>1) then
+            col_blk: do i=j-1,s-1
+               il = Nc-blk_size*(i+1)+1
+               ih = Nc-blk_size*i
+               jl = Nc-blk_size*(j-1)+1
+               jh = Nc-blk_size*(j-2)
+               !print *, "subtract block: ", il,ih,jl,jh
+               
+               b(il:ih,1) = b(il:ih,1) - matmul(U(il:ih,jl:jh),b(jl:jh,1))
 
             end do col_blk
 
             ! top block (not necc. blk_size by blk_size)
+            il = 1
+            ih = Nc-blk_size*s
+            jl = Nc-blk_size*(j-1)+1
+            jh = Nc-blk_size*(j-2)
+            !print *, "subtract top block: ", il,ih,jl,jh
+
+            b(il:ih,1) = b(il:ih,1) - matmul(U(il:ih,jl:jh),b(jl:jh,1))
 
          end if
 
-         ! call back_solve
+         ! call back_solve on the diagonal blocks
+         jl = Nc-blk_size*j+1
+         jh = Nc-blk_size*(j-1)
+         !print *, "back_solve: ",jl,jh
+
+         call back_solve(U(jl:jh,jl:jh),b(jl:jh,:))
 
       end do blk
 
+      ! subtract final top block
+      if (s>0) then
+         il = 1
+         ih = Nc-blk_size*s
+         jl = Nc-blk_size*s+1
+         jh = Nc-blk_size*(s-1)
+         !print *, "subtract final top block: ", il,ih,jl,jh
+         
+         b(il:ih,1) = b(il:ih,1) - matmul(U(il:ih,jl:jh),b(jl:jh,1))
+      end if
 
+      ! Finish with regular back solve
+      row_fin: do j=Nc-blk_size*s,1,-1
+         ! zero on diagonal
+         if (abs(U(j,j)) <= ZERO_TOL) then
+            print *, "error: compla.f90: back_solve: input matrix is singular to tolerance"
+            stop
+         end if
 
-
-
-
+         b(j,1) = b(j,1)/U(j,j)
+         col_fin: do i=j-1,1,-1
+            b(i,1)=b(i,1) - U(i,j)*b(j,1)
+         end do col_fin
+      end do row_fin
 
    end subroutine back_solve_blk
 
@@ -171,10 +210,11 @@ module compla
    end subroutine for_solve
 
    subroutine for_solve_blk(L,b)
-      real (kind=8), allocatable :: L(:,:), b(:,:)
+      real (kind=8) :: L(:,:), b(:,:)
 
       integer (kind=4), parameter :: blk_size=8
       integer (kind=4) :: i,j,s,Nc
+      integer (kind=4) :: il,ih,jl,jh
 
       ! call check_square(L)
       ! call check_lower_tri(L)
@@ -188,31 +228,43 @@ module compla
          !print *, "j=",j
          if (j>1) then
             col_blk: do i=j,s
-               !print *, blk_size*(i-1)+1,blk_size*i, blk_size*(j-2)+1,blk_size*(j-1)
-               b(blk_size*(i-1)+1:blk_size*i,1) = b(blk_size*(i-1)+1:blk_size*i,1) - &
-               matmul(L(blk_size*(i-1)+1:blk_size*i,blk_size*(j-2)+1:blk_size*(j-1)),&
-               b(blk_size*(j-2)+1:blk_size*(j-1),1))
+               il = blk_size*(i-1)+1
+               ih = blk_size*i
+               jl = blk_size*(j-2)+1
+               jh = blk_size*(j-1)
+               ! print *, il,ih,jl,jh
+               
+               b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
+
             end do col_blk
 
-            ! Last block (not necc. of size blk_size by blk_size)
-            !print *,"last block: i",blk_size*s+1,Nc,"j",blk_size*(j-2)+1,blk_size*(j-1)
-            b(blk_size*s+1:Nc,1) = b(blk_size*s+1:Nc,1) - &
-               matmul(L(blk_size*s+1:Nc,blk_size*(j-2)+1:blk_size*(j-1)),&
-               b(blk_size*(j-2)+1:blk_size*(j-1),1))
+            ! subtract bottom block (not necc. of size blk_size by blk_size)
+            il = blk_size*s+1
+            ih = Nc
+            jl = blk_size*(j-2)+1
+            jh = blk_size*(j-1)
+            ! print *, il,ih,jl,ih
+
+            b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
 
          end if
  
-         !print *, "calling for_solve",blk_size*(j-1)+1, blk_size*j
-         call for_solve(L(blk_size*(j-1)+1:blk_size*j,blk_size*(j-1)+1:blk_size*j), b(blk_size*(j-1)+1:blk_size*j,:))
+         !print *, "calling for_solve"
+         jl = blk_size*(j-1)+1
+         jh = blk_size*j
+
+         call for_solve(L(jl:jh,jl:jh), b(jl:jh,:))
 
       end do blk
 
-      ! subtract last block
-      !print *,"last block: i",blk_size*s+1,Nc,"j",blk_size*(s-1)+1,blk_size*(s-0)
+      ! subtract final bottom block
       if (s>0) then
-         b(blk_size*s+1:Nc,1) = b(blk_size*s+1:Nc,1) - &
-            matmul(L(blk_size*s+1:Nc,blk_size*(s-1)+1:blk_size*s),&
-            b(blk_size*(s-1)+1:blk_size*s,1))
+         il = blk_size*s+1
+         ih = Nc
+         jl = blk_size*(s-1)+1
+         jh = blk_size*s
+
+         b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
       end if
 
 
@@ -236,7 +288,7 @@ module compla
 
    
    subroutine fb_solve_chol(A,b,x)
-      real (kind=8), allocatable :: A(:,:), b(:,:), x(:,:)
+      real (kind=8) :: A(:,:), b(:,:), x(:,:)
       real (kind=8), allocatable :: wrk(:,:)
       integer (kind=4) :: Nr,Nc
 
@@ -259,9 +311,29 @@ module compla
 
    end subroutine fb_solve_chol
 
-   ! call back_solve_block()
-   ! call forward_solve_block()
-   ! call fbsolve_block()
+   subroutine fb_solve_blk_chol(A,b,x)
+      real (kind=8) :: A(:,:), b(:,:), x(:,:)
+      real (kind=8), allocatable :: wrk(:,:)
+      integer (kind=4) :: Nr,Nc
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+   
+      if (Nr /= Nc) then
+         print *, "error: compla.f90: fb_solve_chol: input matrix is not square"
+         stop
+      end if
+
+      allocate(wrk(Nc,Nc))
+      x = b
+      wrk = A
+      call chol(wrk) ! stores R in wrk
+      wrk = transpose(wrk)
+      call for_solve_blk(wrk, x) !A*x = R'*R*x=b -> R'*y=b
+      wrk = transpose(wrk)
+      call back_solve_blk(wrk,x) ! Rx=y
+   
+   end subroutine fb_solve_blk_chol
 
    ! }}}
 
@@ -298,7 +370,7 @@ module compla
    
    ! print a rank 2 allocatable array
    subroutine print_array(A)
-      real (kind=8), allocatable, intent(in) :: A(:,:)
+      real (kind=8), intent(in) :: A(:,:)
       character (len=30) :: rowfmt
    
       write(rowfmt, "(A,I4,A)") "(",size(A,2),"(1X,SS,10Es13.4))"
@@ -309,7 +381,7 @@ module compla
 
    ! Frobenius matrix norm/vector 2-norm
    function norm_f(A)
-      real (kind=8), allocatable, intent(in) :: A(:,:)
+      real (kind=8), intent(in) :: A(:,:)
       real (kind=8) :: norm_f
 
       integer (kind=4) :: i,j,Nr,Nc
