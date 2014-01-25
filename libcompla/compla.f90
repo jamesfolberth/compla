@@ -5,7 +5,7 @@
 ! wrap lib in module so it interfaces properly
 module compla
 
-   real (kind=8), parameter :: ZERO_TOL = 10**(-10)
+   real (kind=8), parameter :: ZERO_TOL = 10**(-13)
 
    contains
 
@@ -110,8 +110,44 @@ module compla
 
    end subroutine back_solve
 
+   subroutine back_solve_blk(U,b)
+      real (kind=8), allocatable :: U(:,:), b(:,:)
+
+      integer (kind=4), parameter :: blk_size=8
+      integer (kind=4) :: i,j,s,Nc
+
+      ! call check_square(U)
+      ! call check_upper_tri(U)
+
+      Nc = size(U,1)
+      s = Nc / blk_size
+
+      ! Column oriented backward substitution
+      blk: do j=s,2,-1
+         if (j<s) then
+            col_blk: do i=
+
+            end do col_blk
+
+            ! top block (not necc. blk_size by blk_size)
+
+         end if
+
+         ! call back_solve
+
+      end do blk
+
+
+
+
+
+
+
+   end subroutine back_solve_blk
+
+   
    subroutine for_solve(L,b)
-      real (kind=8), allocatable :: L(:,:), b(:,:)
+      real (kind=8) :: L(:,:), b(:,:)
       integer (kind=4) :: i,j,Nc
 
       ! call check_square(L)
@@ -133,6 +169,71 @@ module compla
       end do row
 
    end subroutine for_solve
+
+   subroutine for_solve_blk(L,b)
+      real (kind=8), allocatable :: L(:,:), b(:,:)
+
+      integer (kind=4), parameter :: blk_size=8
+      integer (kind=4) :: i,j,s,Nc
+
+      ! call check_square(L)
+      ! call check_lower_tri(L)
+
+      Nc = size(L,1)
+      s = Nc / blk_size
+
+      ! Do forward subs in square blocks as far as possible
+      ! column oriented
+      blk: do j=1,s
+         !print *, "j=",j
+         if (j>1) then
+            col_blk: do i=j,s
+               !print *, blk_size*(i-1)+1,blk_size*i, blk_size*(j-2)+1,blk_size*(j-1)
+               b(blk_size*(i-1)+1:blk_size*i,1) = b(blk_size*(i-1)+1:blk_size*i,1) - &
+               matmul(L(blk_size*(i-1)+1:blk_size*i,blk_size*(j-2)+1:blk_size*(j-1)),&
+               b(blk_size*(j-2)+1:blk_size*(j-1),1))
+            end do col_blk
+
+            ! Last block (not necc. of size blk_size by blk_size)
+            !print *,"last block: i",blk_size*s+1,Nc,"j",blk_size*(j-2)+1,blk_size*(j-1)
+            b(blk_size*s+1:Nc,1) = b(blk_size*s+1:Nc,1) - &
+               matmul(L(blk_size*s+1:Nc,blk_size*(j-2)+1:blk_size*(j-1)),&
+               b(blk_size*(j-2)+1:blk_size*(j-1),1))
+
+         end if
+ 
+         !print *, "calling for_solve",blk_size*(j-1)+1, blk_size*j
+         call for_solve(L(blk_size*(j-1)+1:blk_size*j,blk_size*(j-1)+1:blk_size*j), b(blk_size*(j-1)+1:blk_size*j,:))
+
+      end do blk
+
+      ! subtract last block
+      !print *,"last block: i",blk_size*s+1,Nc,"j",blk_size*(s-1)+1,blk_size*(s-0)
+      if (s>0) then
+         b(blk_size*s+1:Nc,1) = b(blk_size*s+1:Nc,1) - &
+            matmul(L(blk_size*s+1:Nc,blk_size*(s-1)+1:blk_size*s),&
+            b(blk_size*(s-1)+1:blk_size*s,1))
+      end if
+
+
+
+      ! Finish up with regular forward subs
+      !print *, blk_size*s
+      row_fin: do j=blk_size*s+1,Nc
+         ! zero on diagonal means singular matrix
+         if (abs(L(j,j)) <= ZERO_TOL) then
+            print *, "error: compla.f90: for_solve_blk: input matrix is singular to tolerance"
+            stop
+         end if
+
+         b(j,1) = b(j,1)/L(j,j)
+         col_fin: do i=j+1,Nc
+            b(i,1)=b(i,1) - L(i,j)*b(j,1) 
+         end do col_fin
+      end do row_fin
+
+   end subroutine for_solve_blk
+
    
    subroutine fb_solve_chol(A,b,x)
       real (kind=8), allocatable :: A(:,:), b(:,:), x(:,:)
@@ -205,6 +306,133 @@ module compla
          write(*, fmt=rowfmt) (A(i,j), j=1,size(A,2))
       end do row_print
    end subroutine print_array
+
+   ! Frobenius matrix norm/vector 2-norm
+   function norm_f(A)
+      real (kind=8), allocatable, intent(in) :: A(:,:)
+      real (kind=8) :: norm_f
+
+      integer (kind=4) :: i,j,Nr,Nc
+
+      Nr=size(A,1)
+      Nc=size(A,2)
+
+      norm_f = 0d0
+
+      row: do j=1,Nc
+         col: do i=1,Nr
+            norm_f = norm_f + A(i,j)*A(i,j)
+         end do col
+      end do row
+
+      norm_f = sqrt(norm_f)
+   
+   end function norm_f
+
+
+   function rand_spd_mat(N)
+      integer (kind=4), intent(in) :: N
+      real (kind=8), allocatable :: rand_spd_mat(:,:)
+      
+      real (kind=8) :: rand, m
+      integer (kind=4) :: i,j
+
+      allocate(rand_spd_mat(N,N))
+      m=0d0
+
+      ! Populate with random numbers [0,10]
+      row: do j=1,N
+         col: do i=1,N
+            call random_number(rand)
+            rand = 10d0*rand
+            rand_spd_mat(i,j) = rand
+
+            if (rand > m) m=rand
+
+         end do col
+      end do row
+
+      ! Make symmetric
+      rand_spd_mat = rand_spd_mat + transpose(rand_spd_mat)
+
+      ! Make diagonally dominant (implies positive definite)
+      diag: do j=1,N
+         rand_spd_mat(j,j) = rand_spd_mat(j,j) + 10d0*N
+      end do diag
+
+   end function rand_spd_mat
+
+
+   function rand_mat(Nr,Nc)
+      integer (kind=4), intent(in) :: Nr, Nc
+      real (kind=8), allocatable :: rand_mat(:,:)
+
+      real (kind=8) :: rand
+      integer (kind=4) :: i,j
+
+      allocate(rand_mat(Nr,Nc))
+
+      ! Populate with random numbers [0,1]
+      row: do j=1,Nc
+         col: do i=1,Nr
+            call random_number(rand)
+            rand_mat(i,j) = rand
+         end do col
+      end do row
+   end function rand_mat
+
+
+   subroutine init_random_seed()
+     ! Stolen from http://gcc.gnu.org/onlinedocs/gfortran/RANDOM_005fSEED.html
+     ! {{{
+     implicit none
+     integer, allocatable :: seed(:)
+     integer :: i, n, un, istat, dt(8), pid, t(2), s
+     integer(8) :: count, tms
+   
+     call random_seed(size = n)
+     allocate(seed(n))
+     ! First try if the OS provides a random number generator
+     open(newunit=un, file="/dev/urandom", access="stream", &
+          form="unformatted", action="read", status="old", iostat=istat)
+     if (istat == 0) then
+        read(un) seed
+        close(un)
+     else
+        ! Fallback to XOR:ing the current time and pid. The PID is
+        ! useful in case one launches multiple instances of the same
+        ! program in parallel.
+        call system_clock(count)
+        if (count /= 0) then
+           t = transfer(count, t)
+        else
+           call date_and_time(values=dt)
+           tms = (dt(1) - 1970) * 365_8 * 24 * 60 * 60 * 1000 &
+                + dt(2) * 31_8 * 24 * 60 * 60 * 1000 &
+                + dt(3) * 24 * 60 * 60 * 60 * 1000 &
+                + dt(5) * 60 * 60 * 1000 &
+                + dt(6) * 60 * 1000 + dt(7) * 1000 &
+                + dt(8)
+           t = transfer(tms, t)
+        end if
+        s = ieor(t(1), t(2))
+        pid = getpid() + 1099279 ! Add a prime
+        s = ieor(s, pid)
+        if (n >= 3) then
+           seed(1) = t(1) + 36269
+           seed(2) = t(2) + 72551
+           seed(3) = pid
+           if (n > 3) then
+              seed(4:) = s + 37 * (/ (i, i = 0, n - 4) /)
+           end if
+        else
+           seed = s + 37 * (/ (i, i = 0, n - 1 ) /)
+        end if
+     end if
+     call random_seed(put=seed)
+     ! }}}
+   end subroutine init_random_seed
+
 
    ! }}}
 
