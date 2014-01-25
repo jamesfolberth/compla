@@ -18,11 +18,11 @@ all: libcompla.so
 #compla.a: compla.o
 #	$(AR) rc compla.a compla.o
 
-libcompla.so: compla.f90
-	$(FORT) $(F90OPTS) $(LDLIBS) -shared compla.f90 -o libcompla.so -fPIC
+libcompla.so: compla.f08
+	$(FORT) $(F90OPTS) $(LDLIBS) -shared compla.f08 -o libcompla.so -fPIC
 
-test: libcompla.so test.f90  
-	$(FORT) $(F90OPTS) -c test.f90
+test: libcompla.so test.f08
+	$(FORT) $(F90OPTS) -c test.f08
 	$(FORT) -o test $(F90OPTS) $(LDLIBS) -lcompla test.o
 	./test
 

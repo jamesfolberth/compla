@@ -13,7 +13,7 @@ module compla
    ! Cholesky Decomp !
    !!!!!!!!!!!!!!!!!!!
    ! {{{ 
-   ! These both use the outer product formulation of the Cholesky decomposition
+   ! This uses the outer product formulation of the Cholesky decomposition
    ! Input matrix must by symmetric, positive definite.
    ! TODO optional input for transpose output or not
 
@@ -74,10 +74,60 @@ module compla
    end subroutine chol 
 
    !subroutine chol_blk()
-
-   !function sym_outer_prod()
+   ! TODO
 
    !subroutine check_sym()
+
+   ! }}}
+
+
+   !!!!!!!!!!!!!
+   ! LU Decomp !
+   !!!!!!!!!!!!!
+   ! {{{
+   subroutine lu(A,p)
+      real (kind=8) :: A(:,:), p(:)
+      
+      integer (kind=4) :: i,m,k,Nc,Nr
+      real (kind=8) :: col_max
+
+      Nc = size(A,1)
+      Nr = size(A,2)
+
+      if (Nc /= Nr ) then
+         print *, "error: compla.f90: lu: input matrix is not square"
+         stop
+      end if
+
+      row: do k=1,Nc-1
+         m = maxloc(abs(A(k:Nc,k)))
+         col_max = A(m,k)
+
+      end do row
+         
+
+
+
+   end subroutine lu
+
+
+   !subroutine apply_perm_vector(L,p,trans)
+   !   real (kind=8) :: L(:,:)
+   !   integer (kind=4) :: p(:), trans
+   !  
+   !   ! ``compute'' P*L
+   !   if (trans == 0 ) then
+   !
+   !   ! `` compute P'*L
+   !   else
+   !
+   !   end if
+   !
+   !end subroutine apply_perm_vector
+
+
+
+
 
    ! }}}
 

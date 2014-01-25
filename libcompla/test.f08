@@ -4,7 +4,7 @@ program test
 
    call init_random_seed()
 
-   ! Cholesky Decomposition
+   ! Cholesky decomposition
    !call test_chol(100)
   
    ! Forward and back solve with Cholesky decomp
@@ -12,6 +12,9 @@ program test
 
    ! Forward and back solve by blocks with Cholesky decomp
    !call test_fb_solve_blk_chol(100)
+
+   ! LU decomposition with partial pivoting
+   call test_lu(10)
   
    ! {{{
    !print *,"test: tic"
@@ -84,7 +87,6 @@ program test
       end subroutine test_chol
       ! }}}
 
-   
       subroutine test_fb_solve_chol(N)
          ! {{{
          integer (kind=4), intent(in) :: N
@@ -213,6 +215,38 @@ program test
       end subroutine test_fb_solve_blk_chol
       ! }}}
 
+      subroutine test_lu(N)
+      ! {{{
+         integer (kind=4), intent(in) :: N
+
+         real (kind=8), allocatable :: A(:,:), p(:)
+         real (kind=8), allocatable :: wrk(:,:)
+         integer (kind=4) :: i
+
+         ! Manual test matrix
+         allocate(A(5,5))
+         A(:,1) = (/ 1,1,10,1,3 /)
+         A(:,2) = (/ 1,4,3,0,6 /)
+         A(:,3) = (/ 7,7,4,4,8 /)
+         A(:,4) = (/ 1,7,7,3,1 /)
+         A(:,5) = (/ 2,5,3,2,5 /)
+
+         allocate(p(5))
+         p(:) = (/ (i,i=1,5) /)
+
+         wrk = A
+         call lu(wrk,p)
+         call print_array(wrk)
+
+
+         print *,
+         print *, "Testing lu:"
+         print *, "Number of rows: ",N
+         print *, "Fro norm of A-P'*L*U: ", norm_f(wrk)
+ 
+
+      end subroutine
+      ! }}
 
 
 end program test
