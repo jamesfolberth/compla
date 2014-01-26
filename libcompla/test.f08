@@ -5,19 +5,19 @@ program test
    call init_random_seed()
 
    ! Cholesky decomposition
-   call test_chol(100)
+   !call test_chol(100)
   
    ! Forward and back solve with Cholesky decomp
-   call test_fb_solve_chol(100)
+   !call test_fb_solve_chol(100)
 
    ! Forward and back solve by blocks with Cholesky decomp (not by blocks)
-   call test_fb_solve_blk_chol(100)
+   !call test_fb_solve_blk_chol(100)
 
    ! LU decomposition with partial pivoting
-   call test_lu(100)
+   !call test_lu(100)
 
    ! forward and back solve (by blocks) with LU decomp (not by blocks)
-   call test_fb_solve_blk_lu(100)
+   call test_fb_solve_blk_lu(1000)
   
    ! {{{
    !print *,"test: tic"
