@@ -1,11 +1,11 @@
 
-.PHONY: all clean
+.PHONY: all clean force
 
 FORT=gfortran
 AR=ar
 
-#F90OPTS= -Wall -Wextra -fbounds-check 
-F90OPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -O2
+#FOROPTS= -Wall -Wextra -fbounds-check 
+FOROPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -O2
 
 LDLIBS= -lsatlas
 
@@ -13,18 +13,21 @@ LDLIBS= -lsatlas
 all: libcompla.so 
 
 #compla.o: compla.f90
-#	$(FORT) $(F90OPTS) $(LDLIBS) -c compla.f90
+#	$(FORT) $(FOROPTS) $(LDLIBS) -c compla.f90
 #
 #compla.a: compla.o
 #	$(AR) rc compla.a compla.o
 
 libcompla.so: compla.f08
-	$(FORT) $(F90OPTS) $(LDLIBS) -shared compla.f08 -o libcompla.so -fPIC
+	$(FORT) $(FOROPTS) $(LDLIBS) -shared compla.f08 -o libcompla.so -fPIC
 
-test: libcompla.so test.f08
-	$(FORT) $(F90OPTS) -c test.f08
-	$(FORT) -o test $(F90OPTS) $(LDLIBS) -lcompla test.o
+test: libcompla.so test.f08 force
+	$(FORT) $(FOROPTS) -c test.f08
+	$(FORT) -o test $(FOROPTS) $(LDLIBS) -lcompla test.o
 	./test
+
+# phony target to force make to build targets that depend on force
+force:
 
 clean:
 	rm -f libcompla.so test
