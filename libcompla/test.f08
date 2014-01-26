@@ -5,16 +5,19 @@ program test
    call init_random_seed()
 
    ! Cholesky decomposition
-   !call test_chol(100)
+   call test_chol(100)
   
    ! Forward and back solve with Cholesky decomp
-   !call test_fb_solve_chol(100)
+   call test_fb_solve_chol(100)
 
-   ! Forward and back solve by blocks with Cholesky decomp
-   !call test_fb_solve_blk_chol(100)
+   ! Forward and back solve by blocks with Cholesky decomp (not by blocks)
+   call test_fb_solve_blk_chol(100)
 
    ! LU decomposition with partial pivoting
-   call test_lu(10)
+   call test_lu(100)
+
+   ! forward and back solve (by blocks) with LU decomp (not by blocks)
+   call test_fb_solve_blk_lu(100)
   
    ! {{{
    !print *,"test: tic"
@@ -46,10 +49,9 @@ program test
          real (kind=8), allocatable :: A(:,:), wrk(:,:)
 
          if (allocated(A)) deallocate(A)
-         allocate(A(5,5))
-         
          A = rand_spd_mat(N)
 
+         !allocate(A(5,5))
          !A(:,1) = (/ 27,10,5,12,4 /)
          !A(:,2) = (/ 10,29,11,15,14 /)
          !A(:,3) = (/ 5,11,18,14,10 /)
@@ -97,14 +99,14 @@ program test
          if (allocated(b)) deallocate(b)
          if (allocated(x)) deallocate(x)
          if (allocated(wrk)) deallocate(wrk)
-         allocate(A(5,5))
-         allocate(b(5,1))
-         allocate(x(5,1))
-         allocate(wrk(size(A,1),size(A,2)))
-     
          A = rand_spd_mat(N)
          b = rand_mat(N,1)
+         x = b
 
+         !allocate(A(5,5))
+         !allocate(b(5,1))
+         !allocate(x(5,1))
+         !allocate(wrk(size(A,1),size(A,2)))
          !A(:,1) = (/ 27,10,5,12,4 /)
          !A(:,2) = (/ 10,29,11,15,14 /)
          !A(:,3) = (/ 5,11,18,14,10 /)
@@ -149,7 +151,7 @@ program test
          print *, "2-norm of residual vector = ", norm_f(x)
          !call print_array(x)
 
-         deallocate(A,b,x,wrk)
+         deallocate(A,b,x)
 
       end subroutine test_fb_solve_chol
       ! }}}
@@ -219,34 +221,83 @@ program test
       ! {{{
          integer (kind=4), intent(in) :: N
 
-         real (kind=8), allocatable :: A(:,:), p(:)
-         real (kind=8), allocatable :: wrk(:,:)
+         real (kind=8), allocatable :: A(:,:)
+         integer (kind=4), allocatable :: p(:)
+         real (kind=8), allocatable :: wrk(:,:), L(:,:), U(:,:)
          integer (kind=4) :: i
 
          ! Manual test matrix
-         allocate(A(5,5))
-         A(:,1) = (/ 1,1,10,1,3 /)
-         A(:,2) = (/ 1,4,3,0,6 /)
-         A(:,3) = (/ 7,7,4,4,8 /)
-         A(:,4) = (/ 1,7,7,3,1 /)
-         A(:,5) = (/ 2,5,3,2,5 /)
+         ! {{{
+         !allocate(A(5,5))
+         !A(:,1) = (/ 1,1,10,1,3 /)
+         !A(:,2) = (/ 1,4,3,0,6 /)
+         !A(:,3) = (/ 7,7,4,4,8 /)
+         !A(:,4) = (/ 1,7,7,3,1 /)
+         !A(:,5) = (/ 2,5,3,2,5 /)
+         !allocate(p(5))
+         !p(:) = (/ (i,i=1,5) /)
 
-         allocate(p(5))
-         p(:) = (/ (i,i=1,5) /)
+         !allocate(A(3,3))
+         !A(:,1) = (/ 2,4,8 /)
+         !A(:,2) = (/ 1,3,7 /)
+         !A(:,3) = (/ 1,3,9 /)
+         !allocate(p(3))
+         !p(:) = (/ (i,i=1,3) /)
+         ! }}}
+
+         A = rand_mat(N,N)
+         allocate(p(N))
+         p(:) = (/ (i,i=1,N) /)
 
          wrk = A
-         call lu(wrk,p)
-         call print_array(wrk)
 
+         call lu(wrk,p)
+         call apply_perm_vector(wrk,p,1)
+
+         allocate(L(size(A,1),size(A,2)),U(size(A,1),size(A,2)))
+         call form_LU(wrk,L,U)
+
+         wrk = matmul(L,U)
+         call apply_perm_vector(A,p,1)
+         wrk = A - wrk ! P*A - L*U
 
          print *,
          print *, "Testing lu:"
          print *, "Number of rows: ",N
-         print *, "Fro norm of A-P'*L*U: ", norm_f(wrk)
+         print *, "Fro norm of P*A-L*U: ", norm_f(wrk)
  
 
       end subroutine
-      ! }}
+      ! }}}
+
+      subroutine test_fb_solve_blk_lu(N)
+         ! {{{
+         integer (kind=4), intent(in) :: N
+         real (kind=8), allocatable :: A(:,:)
+         real (kind=8), allocatable :: b(:,:), x(:,:)
+
+         !real (kind=8), allocatable :: R(:,:), Rt(:,:)
+
+         A = rand_mat(N,N)
+         b = rand_mat(N,1)
+         x = b ! just allocating x
+
+         
+         call fb_solve_blk_lu(A,b,x)
+         !call print_array(x)
+      
+         x = matmul(A,x)-b
+       
+         print *,
+         print *, "Testing fb_solve_blk_lu:"
+         print *, "Number of rows: ",N
+         print *, "2-norm of residual vector = ", norm_f(x)
+         !call print_array(x)
+
+         deallocate(A,b,x)
+
+      end subroutine test_fb_solve_blk_lu
+      ! }}}
 
 
 end program test

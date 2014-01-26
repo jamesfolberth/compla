@@ -1,4 +1,4 @@
-! libcompla.f90
+! compla.f08
 ! Computational Linear Algebra library
 ! James Folberth - Spring 2014
 
@@ -26,7 +26,7 @@ module compla
 
    ! check that A is square
    if (size(A,1) /= size(A,2)) then
-      print *, "error: compla.f90: chol: input matrix is not square"
+      print *, "error: compla.f08: chol: input matrix is not square"
       stop
    end if
 
@@ -38,7 +38,7 @@ module compla
    recurse: do i=1,Nc-1
       ! check a_{i,i} > 0
       if (A(i,i) <= 0d0) then
-         print *, "error: compla.f90: chol: input matrix is not positive definite"
+         print *, "error: compla.f08: chol: input matrix is not positive definite"
          stop
       end if
 
@@ -56,7 +56,7 @@ module compla
    end do recurse
 
    if (A(Nc,Nc) <= 0d0) then
-      print *, "error: compla.f90: chol: input matrix is not positive definite"
+      print *, "error: compla.f08: chol: input matrix is not positive definite"
       stop
    end if
   
@@ -86,48 +86,140 @@ module compla
    !!!!!!!!!!!!!
    ! {{{
    subroutine lu(A,p)
-      real (kind=8) :: A(:,:), p(:)
+      real (kind=8) :: A(:,:)
+      integer (kind=4) :: p(:)
       
-      integer (kind=4) :: i,m,k,Nc,Nr
+      integer (kind=4) :: i,j,k,Nc,Nr,m,temp_ind
       real (kind=8) :: col_max
+      !real (kind=8), allocatable :: temp_row(:)
+      integer (kind=4) :: singular
 
       Nc = size(A,1)
       Nr = size(A,2)
 
       if (Nc /= Nr ) then
-         print *, "error: compla.f90: lu: input matrix is not square"
+         print *, "error: compla.f08: lu: input matrix is not square"
          stop
       end if
 
+      singular = 0
+      p = (/ (k,k=1,Nc) /)
       row: do k=1,Nc-1
-         m = maxloc(abs(A(k:Nc,k)))
-         col_max = A(m,k)
 
+         m = col_find_absmax(A,p,k)
+         !If pivot is near zero, matrix is singular
+         if (abs(col_max) < ZERO_TOL) then
+            print *, "UNTESTED"
+            print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
+            singular = 1
+            stop
+
+         else
+            temp_ind = p(k)
+            p(k) = p(m)
+            p(m) = temp_ind
+
+            multipliers: do i=k+1,Nc
+               A(p(i),k) = A(p(i),k) / A(p(k),k)
+               !print *,A(p(i),k)
+            end do multipliers
+
+            ! column oriented row operation
+            row_op: do j=k+1,Nc
+               do i=k+1,Nc
+                  A(p(i),j) = A(p(i),j) - A(p(i),k)*A(p(k),j)
+               end do
+            end do row_op
+
+         end if
+
+         ! check A(end,end)
+         if (abs(A(p(Nc),Nc)) < ZERO_TOL) then
+            print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
+            singular = 1
+            stop
+         end if
       end do row
          
-
-
-
    end subroutine lu
 
 
-   !subroutine apply_perm_vector(L,p,trans)
-   !   real (kind=8) :: L(:,:)
-   !   integer (kind=4) :: p(:), trans
-   !  
-   !   ! ``compute'' P*L
-   !   if (trans == 0 ) then
-   !
-   !   ! `` compute P'*L
-   !   else
-   !
-   !   end if
-   !
-   !end subroutine apply_perm_vector
+   function col_find_absmax(A,p,k)
+      real (kind=8), intent(in) :: A(:,:)
+      integer (kind=4), intent(in) :: p(:),k
+
+      real (kind=8) :: aval,amax
+      integer (kind=4) :: i,Nc,col_find_absmax
+
+      Nc = size(A,1)
+
+      amax = 0
+      col_find_absmax = p(k)
+      col: do i=k,Nc
+         aval = abs(A(p(i),k))
+         !print *,"find: ",p(i), aval
+         if (aval > amax) then
+            col_find_absmax=i
+            amax = aval
+         end if
+      end do col
+   end function col_find_absmax
 
 
+   subroutine apply_perm_vector(A,p,trans)
+      real (kind=8) :: A(:,:)
+      integer (kind=4) :: p(:), trans
+
+      !real (kind=8), allocatable :: temp_row(:), temp(:,:)
+      real (kind=8), allocatable :: temp(:,:)
+      integer (kind=4) :: i
+      !integer (kind=4), allocatable :: p_inv(:)
+
+      allocate(temp(size(A,1),size(A,2)))
+     
+      ! ``compute'' P*
+      if (trans == 0 ) then
+         print *, "error: compla.f08: apply_perm_vector: no transpose not implemented"
+         stop
+
+   
+      ! `` compute P'*A
+      else
+         
+         row: do i=1,size(A,1)
+            temp(i,:) = A(p(i),:)
+         end do row
+         A = temp
+      end if
+
+      deallocate(temp)
+   
+   end subroutine apply_perm_vector
 
 
+   subroutine form_LU(A,L,U)
+      real (kind=8) :: A(:,:), L(:,:), U(:,:)
+
+      integer (kind=4) :: i,j,Nc
+
+      ! assume square
+      Nc = size(A,1)
+
+      L = 0d0
+      U = 0d0
+
+      row: do j=1,Nc
+         L(j,j) = 1d0
+         do i=j+1,Nc
+            L(i,j) = A(i,j)
+         end do 
+
+         do i=j,1,-1
+            U(i,j) = A(i,j)
+         end do
+      end do row
+
+   end subroutine form_LU
 
    ! }}}
 
@@ -148,7 +240,7 @@ module compla
       row: do j=Nc,1,-1
          ! zero on diagonal
          if (abs(U(j,j)) <= ZERO_TOL) then
-            print *, "error: compla.f90: back_solve: input matrix is singular to tolerance"
+            print *, "error: compla.f08: back_solve: input matrix is singular to tolerance"
             stop
          end if
 
@@ -222,7 +314,7 @@ module compla
       row_fin: do j=Nc-blk_size*s,1,-1
          ! zero on diagonal
          if (abs(U(j,j)) <= ZERO_TOL) then
-            print *, "error: compla.f90: back_solve: input matrix is singular to tolerance"
+            print *, "error: compla.f08: back_solve: input matrix is singular to tolerance"
             stop
          end if
 
@@ -247,7 +339,7 @@ module compla
       row: do j=1,Nc
          ! zero on diagonal means singular matrix
          if (abs(L(j,j)) <= ZERO_TOL) then
-            print *, "error: compla.f90: for_solve: input matrix is singular to tolerance"
+            print *, "error: compla.f08: for_solve: input matrix is singular to tolerance"
             stop
          end if
 
@@ -324,7 +416,7 @@ module compla
       row_fin: do j=blk_size*s+1,Nc
          ! zero on diagonal means singular matrix
          if (abs(L(j,j)) <= ZERO_TOL) then
-            print *, "error: compla.f90: for_solve_blk: input matrix is singular to tolerance"
+            print *, "error: compla.f08: for_solve_blk: input matrix is singular to tolerance"
             stop
          end if
 
@@ -346,7 +438,7 @@ module compla
       Nc = size(A,2)
    
       if (Nr /= Nc) then
-         print *, "error: compla.f90: fb_solve_chol: input matrix is not square"
+         print *, "error: compla.f08: fb_solve_chol: input matrix is not square"
          stop
       end if
 
@@ -370,7 +462,7 @@ module compla
       Nc = size(A,2)
    
       if (Nr /= Nc) then
-         print *, "error: compla.f90: fb_solve_chol: input matrix is not square"
+         print *, "error: compla.f08: fb_solve_blk_chol: input matrix is not square"
          stop
       end if
 
@@ -384,6 +476,43 @@ module compla
       call back_solve_blk(wrk,x) ! Rx=y
    
    end subroutine fb_solve_blk_chol
+
+   subroutine fb_solve_blk_lu(A,b,x)
+      real (kind=8) :: A(:,:), b(:,:), x(:,:)
+
+      real (kind=8), allocatable :: wrk(:,:), L(:,:), U(:,:)
+      integer (kind=4) :: Nr,Nc,i
+      integer (kind=4), allocatable :: p(:)
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+   
+      if (Nr /= Nc) then
+         print *, "error: compla.f08: fb_solve_blk_lu: input matrix is not square"
+         stop
+      end if
+
+      allocate(wrk(Nc,Nc))
+      allocate(p(Nc))
+      wrk = A
+      p = (/ (i,i=1,Nc) /)
+      call lu(wrk,p) ! stores LU in wrk
+      call apply_perm_vector(wrk,p,1)
+
+      x = b
+      call apply_perm_vector(x,p,1) ! permute b
+
+
+      allocate(L(size(A,1),size(A,2)),U(size(A,1),size(A,2)))
+      call form_LU(wrk,L,U)
+
+      ! Note that I could write speciallized for/back solves so I don't have to form L,U
+      call for_solve_blk(L,x)
+      call back_solve_blk(U,x)
+   
+   end subroutine fb_solve_blk_lu
+
+
 
    ! }}}
 
@@ -424,6 +553,7 @@ module compla
       character (len=30) :: rowfmt
    
       write(rowfmt, "(A,I4,A)") "(",size(A,2),"(1X,SS,10Es13.4))"
+      print *,
       row_print: do i=1,size(A,1)
          write(*, fmt=rowfmt) (A(i,j), j=1,size(A,2))
       end do row_print
