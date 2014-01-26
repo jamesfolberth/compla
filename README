@@ -1,0 +1,8 @@
+
+This repo has some code that I wrote for a computational linear algebra class at CU Boulder in Spring 2014.  Note that I'm learning fortran; I'm using the 2008 standard, but I think the code should be 90/95 compliant.
+
+libcompla/ has libcompla.so, a library with a bunch of useful functions (e.g. print_array, chol, lu, etc.).
+
+test/ probably doesn't have anything good.
+
+James
