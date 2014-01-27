@@ -15,14 +15,73 @@ module compla
    ! {{{ 
    ! This uses the outer product formulation of the Cholesky decomposition
    ! Input matrix must by symmetric, positive definite.
-   ! TODO optional input for transpose output or not
+   ! TODO optional input for transpose output or not?
 
    ! Outer product formulation
    subroutine chol(A)
    real (kind=8) :: A(:,:)
 
    integer (kind=4) :: i,j,k,Nc
-   real (kind=8), allocatable :: b(:,:)
+
+   ! check that A is square
+   if (size(A,1) /= size(A,2)) then
+      print *, "error: compla.f08: chol: input matrix is not square"
+      stop
+   end if
+
+   ! call check_sym(A)
+
+   ! parameter to store size(A,1)
+   Nc = size(A,1)
+
+   ! main Cholesky loop
+   ! Stores Cholesky factor in lower triangle of A, then transposes (column oriented)
+   ! In my implementation, this is faster than the row oriented version (because Fortran stores column-wise)
+   recurse: do i=1,Nc-1
+      ! check a_{i,i} > 0
+      if (A(i,i) <= ZERO_TOL) then
+         print *, "error: compla.f08: chol: input matrix is not positive definite"
+         stop
+      end if
+
+      A(i,i) = sqrt(A(i,i))
+      A(i+1:Nc,i) = A(i+1:Nc,i) / A(i,i)
+     
+      ! Outer product A~ <- A^ - s*s'
+      ! Only compute lower triangle
+      row: do j=i+1,Nc
+         col: do k=j,Nc
+            A(k,j) = A(k,j)-A(j,i)*A(k,i)
+         end do col
+      end do row
+
+   end do recurse
+
+   if (A(Nc,Nc) <= ZERO_TOL) then
+      print *, "error: compla.f08: chol: input matrix is not positive definite"
+      stop
+   end if
+  
+   A(Nc,Nc) = sqrt(A(Nc,Nc))
+
+   ! transpose A, then zero out strictly lower triangle
+   A = transpose(A)
+   do j=1,Nc-1
+      do i=j+1,Nc
+        A(i,j) = 0d0
+      end do
+   end do
+         
+   end subroutine chol
+
+
+   ! Outer product formulation
+   ! row oriented
+   ! XXX don't use this; chol() is faster (at least for Nc>1000)
+   subroutine chol_row(A)
+   real (kind=8) :: A(:,:)
+
+   integer (kind=4) :: i,j,k,Nc
 
    ! check that A is square
    if (size(A,1) /= size(A,2)) then
@@ -32,48 +91,47 @@ module compla
 
    ! parameter to store size(A,1)
    Nc = size(A,1)
-   allocate(b(Nc,1))
 
    ! main Cholesky loop
+   ! Stores Cholesky factor in upper triangle of A; row oriented algorithm, even though FORTRAN stores column-wise
    recurse: do i=1,Nc-1
       ! check a_{i,i} > 0
-      if (A(i,i) <= 0d0) then
+      if (A(i,i) <= ZERO_TOL) then
          print *, "error: compla.f08: chol: input matrix is not positive definite"
          stop
       end if
 
       A(i,i) = sqrt(A(i,i))
-      b(i+1:Nc,1) = A(i+1:Nc,i) / A(i,i)
-      A(i+1:Nc,i) = b(i+1:Nc,1)
+      A(i,i+1:Nc) = A(i,i+1:Nc) / A(i,i)
      
       ! Outer product A~ <- A^ - s*s'
+      ! Only compute upper triangle
       row: do j=i+1,Nc
-         col: do k=i+1,Nc
-            A(j,k) = A(j,k)-b(j,1)*b(k,1)
+         col: do k=i+1,j
+            A(k,j) = A(k,j)-A(i,j)*A(i,k)
          end do col
       end do row
+      !call print_array(A)
 
    end do recurse
 
-   if (A(Nc,Nc) <= 0d0) then
+   if (A(Nc,Nc) <= ZERO_TOL) then
       print *, "error: compla.f08: chol: input matrix is not positive definite"
       stop
    end if
   
-   deallocate(b)
    A(Nc,Nc) = sqrt(A(Nc,Nc))
 
-   ! TODO smarter way?
-   A = transpose(A)
-   stupid: do i=1,Nc
-      dumb: do j=1,i-1
+   do j=1,Nc-1
+      do i=j+1,Nc
          A(i,j) = 0d0
-      end do dumb
-   end do stupid
+      end do
+   end do
          
-   end subroutine chol 
+   end subroutine chol_row
 
-   !subroutine chol_blk()
+
+   !subroutine chol_blk(A)
    ! TODO
 
    !subroutine check_sym()
@@ -510,9 +568,6 @@ module compla
       call back_solve_blk(U,x)
    
    end subroutine fb_solve_blk_lu
-
-
-
    ! }}}
 
 
@@ -632,7 +687,7 @@ module compla
       end do row
    end function rand_mat
 
-
+   
    subroutine init_random_seed()
      ! Stolen from http://gcc.gnu.org/onlinedocs/gfortran/RANDOM_005fSEED.html
      ! {{{
@@ -682,9 +737,8 @@ module compla
      end if
      call random_seed(put=seed)
      ! }}}
+
    end subroutine init_random_seed
-
-
    ! }}}
 
 end module compla
