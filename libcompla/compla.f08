@@ -85,7 +85,7 @@ module compla
 
    ! check that A is square
    if (size(A,1) /= size(A,2)) then
-      print *, "error: compla.f08: chol: input matrix is not square"
+      print *, "error: compla.f08: chol_row: input matrix is not square"
       stop
    end if
 
@@ -97,7 +97,7 @@ module compla
    recurse: do i=1,Nc-1
       ! check a_{i,i} > 0
       if (A(i,i) <= ZERO_TOL) then
-         print *, "error: compla.f08: chol: input matrix is not positive definite"
+         print *, "error: compla.f08: chol_row: input matrix is not positive definite"
          stop
       end if
 
@@ -116,7 +116,7 @@ module compla
    end do recurse
 
    if (A(Nc,Nc) <= ZERO_TOL) then
-      print *, "error: compla.f08: chol: input matrix is not positive definite"
+      print *, "error: compla.f08: chol_row: input matrix is not positive definite"
       stop
    end if
   
@@ -161,6 +161,7 @@ module compla
       end if
 
       singular = 0
+      ! TODO this overwrites existing p
       p = (/ (k,k=1,Nc) /)
       row: do k=1,Nc-1
 
@@ -170,9 +171,10 @@ module compla
             print *, "UNTESTED"
             print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
             singular = 1
-            stop
+            stop ! TODO should really keep going
 
          else
+            ! ``swap'' rows
             temp_ind = p(k)
             p(k) = p(m)
             p(m) = temp_ind
@@ -228,29 +230,15 @@ module compla
       real (kind=8) :: A(:,:)
       integer (kind=4) :: p(:), trans
 
-      !real (kind=8), allocatable :: temp_row(:), temp(:,:)
-      real (kind=8), allocatable :: temp(:,:)
-      integer (kind=4) :: i
-      !integer (kind=4), allocatable :: p_inv(:)
-
-      allocate(temp(size(A,1),size(A,2)))
-     
       ! ``compute'' P*
       if (trans == 0 ) then
-         print *, "error: compla.f08: apply_perm_vector: no transpose not implemented"
-         stop
-
-   
+         A(:,:) = A(p,:)
+ 
       ! `` compute P'*A
       else
-         
-         row: do i=1,size(A,1)
-            temp(i,:) = A(p(i),:)
-         end do row
-         A = temp
-      end if
+         A(p,:) = A(:,:) 
 
-      deallocate(temp)
+      end if
    
    end subroutine apply_perm_vector
 
@@ -408,6 +396,35 @@ module compla
 
    end subroutine for_solve
 
+   ! This is the same as the for_solve routine, but assumes
+   ! that the main diagonal of L is filled with ones 
+   ! expected input is A, overwritten with L,U from LU decomp.
+   subroutine for_solve_lu(L,b)
+      real (kind=8) :: L(:,:), b(:,:)
+      integer (kind=4) :: i,j,Nc
+
+      ! call check_square(L)
+      ! call check_lower_tri(L)
+
+      Nc = size(L,1)
+
+      row: do j=1,Nc
+         ! it is assumed that L(j,j)=1
+
+         ! zero on diagonal means singular matrix
+         !if (abs(L(j,j)) <= ZERO_TOL) then
+         !   print *, "error: compla.f08: for_solve: input matrix is singular to tolerance"
+         !   stop
+         !end if
+
+         !b(j,1) = b(j,1)/L(j,j) 
+         col: do i=j+1,Nc
+            b(i,1)=b(i,1) - L(i,j)*b(j,1) 
+         end do col
+      end do row
+
+   end subroutine for_solve_lu
+
    subroutine for_solve_blk(L,b)
       real (kind=8) :: L(:,:), b(:,:)
 
@@ -466,8 +483,6 @@ module compla
          b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
       end if
 
-
-
       ! Finish up with regular forward subs
       !print *, blk_size*s
       row_fin: do j=blk_size*s+1,Nc
@@ -485,7 +500,86 @@ module compla
 
    end subroutine for_solve_blk
 
-   
+   ! This is the same as for_solve_blk, except that is assumes ones along the main diagonal of L
+   ! Use this routine for L,U overwritten on A
+   subroutine for_solve_lu_blk(L,b)
+      real (kind=8) :: L(:,:), b(:,:)
+
+      integer (kind=4), parameter :: blk_size=8
+      integer (kind=4) :: i,j,s,Nc
+      integer (kind=4) :: il,ih,jl,jh
+
+      ! call check_square(L)
+      ! call check_lower_tri(L)
+
+      Nc = size(L,1)
+      s = Nc / blk_size
+
+      ! Do forward subs in square blocks as far as possible
+      ! column oriented
+      blk: do j=1,s
+         !print *, "j=",j
+         if (j>1) then
+            col_blk: do i=j,s
+               il = blk_size*(i-1)+1
+               ih = blk_size*i
+               jl = blk_size*(j-2)+1
+               jh = blk_size*(j-1)
+               ! print *, il,ih,jl,jh
+               
+               b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
+
+            end do col_blk
+
+            ! subtract bottom block (not necc. of size blk_size by blk_size)
+            il = blk_size*s+1
+            ih = Nc
+            jl = blk_size*(j-2)+1
+            jh = blk_size*(j-1)
+            ! print *, il,ih,jl,ih
+
+            b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
+
+         end if
+ 
+         !print *, "calling for_solve"
+         jl = blk_size*(j-1)+1
+         jh = blk_size*j
+
+         ! XXX this should be the only difference between
+         !     for_solve_blk and for_solve_lu_blk
+         call for_solve_lu(L(jl:jh,jl:jh), b(jl:jh,:))
+
+      end do blk
+
+      ! subtract final bottom block
+      if (s>0) then
+         il = blk_size*s+1
+         ih = Nc
+         jl = blk_size*(s-1)+1
+         jh = blk_size*s
+
+         b(il:ih,1) = b(il:ih,1) - matmul(L(il:ih,jl:jh),b(jl:jh,1))
+      end if
+
+      ! Finish up with regular forward subs
+      !print *, blk_size*s
+      row_fin: do j=blk_size*s+1,Nc
+         ! zero on diagonal means singular matrix
+         ! L(j,j) = 1, by assumption
+         !if (abs(L(j,j)) <= ZERO_TOL) then
+         !   print *, "error: compla.f08: for_solve_blk: input matrix is singular to tolerance"
+         !   stop
+         !end if
+
+         b(j,1) = b(j,1) ! L(j,j)=1
+         col_fin: do i=j+1,Nc
+            b(i,1)=b(i,1) - L(i,j)*b(j,1) 
+         end do col_fin
+      end do row_fin
+
+   end subroutine for_solve_lu_blk
+
    subroutine fb_solve_chol(A,b,x)
       real (kind=8) :: A(:,:), b(:,:), x(:,:)
       real (kind=8), allocatable :: wrk(:,:)
@@ -534,10 +628,41 @@ module compla
    
    end subroutine fb_solve_blk_chol
 
-   subroutine fb_solve_blk_lu(A,b,x)
+
+   ! This routine is basically for testing purposes
+   ! I'd probably want to use the block routine
+   subroutine fb_solve_lu(A,b,x)
+      ! A is assumed to be a ``work array''
       real (kind=8) :: A(:,:), b(:,:), x(:,:)
 
-      real (kind=8), allocatable :: wrk(:,:), L(:,:), U(:,:)
+      integer (kind=4) :: Nr,Nc,i
+      integer (kind=4), allocatable :: p(:)
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+   
+      if (Nr /= Nc) then
+         print *, "error: compla.f08: fb_solve_lu: input matrix is not square"
+         stop
+      end if
+
+      allocate(p(Nc))
+      p = (/ (i,i=1,Nc) /)
+      call lu(A,p) ! stores LU in A (note that L,U wont be triangular until we apply the permutation vector)
+      call apply_perm_vector(A,p,0) ! now make L,U triangular in memory
+
+      x = b
+      call apply_perm_vector(x,p,0) ! permute b ( PAx = LUx = Pb )
+ 
+      call for_solve_lu(A,x)
+      call back_solve(A,x)
+
+   end subroutine fb_solve_lu
+
+   subroutine fb_solve_blk_lu(A,b,x)
+      ! A is assumed to be a ``work array''
+      real (kind=8) :: A(:,:), b(:,:), x(:,:)
+
       integer (kind=4) :: Nr,Nc,i
       integer (kind=4), allocatable :: p(:)
 
@@ -549,25 +674,19 @@ module compla
          stop
       end if
 
-      allocate(wrk(Nc,Nc))
       allocate(p(Nc))
-      wrk = A
       p = (/ (i,i=1,Nc) /)
-      call lu(wrk,p) ! stores LU in wrk
-      call apply_perm_vector(wrk,p,1)
+      call lu(A,p) ! stores LU in A
+      call apply_perm_vector(A,p,0)
 
       x = b
-      call apply_perm_vector(x,p,1) ! permute b
+      call apply_perm_vector(x,p,0) ! permute b
 
-
-      allocate(L(size(A,1),size(A,2)),U(size(A,1),size(A,2)))
-      call form_LU(wrk,L,U)
-
-      ! Note that I could write speciallized for/back solves so I don't have to form L,U
-      call for_solve_blk(L,x)
-      call back_solve_blk(U,x)
+      call for_solve_lu_blk(A,x)
+      call back_solve_blk(A,x)
    
    end subroutine fb_solve_blk_lu
+
    ! }}}
 
 
