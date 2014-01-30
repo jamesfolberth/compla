@@ -4,23 +4,20 @@ program test
 
    call init_random_seed()
 
-   ! TODO change to relative errors; use 1-norm?
-   ! TODO condition number routine
-
    ! Cholesky decomposition
-   call test_chol(100)
+   !call test_chol(100)
 
    ! Time row/col oriented Cholesky decomp
-   call time_chol(1000)
+   !call time_chol(1000)
   
    ! Forward and back solve with Cholesky decomp
-   call test_fb_solve_chol(100)
+   !call test_fb_solve_chol(100)
 
    ! Forward and back solve by blocks with Cholesky decomp (not by blocks)
-   call test_fb_solve_blk_chol(100)
+   !call test_fb_solve_blk_chol(100)
 
    ! LU decomposition with partial pivoting
-   call test_lu(100)
+   !call test_lu(100)
 
    ! forward and back solve (not by blocks) with LU decomp (not by blocks)
    call test_fb_solve_lu(100)
@@ -28,7 +25,8 @@ program test
    ! forward and back solve (by blocks) with LU decomp (not by blocks)
    call test_fb_solve_blk_lu(100)
 
-
+   ! Test matrix condition number
+   !call test_condest_lu()
  
   
    ! {{{
@@ -89,11 +87,12 @@ program test
          print *,
          print *, "Testing chol:"
          print *, "Number of rows: ",N
-         print *, "Fro norm of A-R'*R: ", norm_f(wrk)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
          
          deallocate(A)
       end subroutine test_chol
       ! }}}
+
 
       subroutine time_chol(N)
          ! {{{
@@ -113,7 +112,7 @@ program test
          print *,
          print *, "Timing chol: ",t_1-t_0," CPU seconds"
          print *, "Number of rows: ",N
-         print *, "Fro norm of A-R'*R: ", norm_f(wrk)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
 
          wrk = A
          call cpu_time(t_0)
@@ -123,11 +122,12 @@ program test
          print *,
          print *, "Timing chol_row: ",t_1-t_0," CPU seconds"
          print *, "Number of rows: ",N
-         print *, "Fro norm of A-R'*R: ", norm_f(wrk)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
 
          deallocate(A,wrk)
       end subroutine time_chol
       ! }}}
+
 
       subroutine test_fb_solve_chol(N)
          ! {{{
@@ -188,13 +188,14 @@ program test
          print *,
          print *, "Testing fb_solve_chol:"
          print *, "Number of rows: ",N
-         print *, "2-norm of residual vector = ", norm_f(x)
+         print *, "2-norm of residual vector = ", norm_p(x,2)
          !call print_array(x)
 
          deallocate(A,b,x)
 
       end subroutine test_fb_solve_chol
       ! }}}
+
 
       subroutine test_fb_solve_blk_chol(N)
          ! {{{
@@ -249,13 +250,14 @@ program test
          print *,
          print *, "Testing fb_solve_blk_chol:"
          print *, "Number of rows: ",N
-         print *, "2-norm of residual vector = ", norm_f(x)
+         print *, "2-norm of residual vector = ", norm_p(x,2)
          !call print_array(x)
 
          deallocate(A,b,x)
 
       end subroutine test_fb_solve_blk_chol
       ! }}}
+
 
       subroutine test_lu(N)
       ! {{{
@@ -285,7 +287,7 @@ program test
          !p(:) = (/ (i,i=1,3) /)
          ! }}}
 
-         A = rand_mat(N,N)
+         A = 2d0*rand_mat(N,N)-1d0
          allocate(p(N))
          p(:) = (/ (i,i=1,N) /)
 
@@ -304,60 +306,36 @@ program test
          print *,
          print *, "Testing lu:"
          print *, "Number of rows: ",N
-         print *, "Fro norm of P*A-L*U: ", norm_f(wrk)
+         print *, "1 norm of P*A-L*U: ", norm_p(wrk,1)
 
       end subroutine
       ! }}}
 
-      subroutine test_fb_solve_blk_lu(N)
-         ! {{{
-         integer (kind=4), intent(in) :: N
-         real (kind=8), allocatable :: A(:,:), wrk(:,:)
-         real (kind=8), allocatable :: b(:,:), x(:,:)
-
-         !real (kind=8), allocatable :: R(:,:), Rt(:,:)
-
-         A = rand_mat(N,N)
-         wrk = A
-         b = rand_mat(N,1)
-         x = b ! just allocating x
          
-         call fb_solve_blk_lu(wrk,b,x)
-         !call print_array(x)
-      
-         x = matmul(A,x)-b
-       
-         print *,
-         print *, "Testing fb_solve_blk_lu:"
-         print *, "Number of rows: ",N
-         print *, "2-norm of residual vector = ", norm_f(x)
-         !call print_array(x)
-
-         deallocate(A,b,x)
-
-      end subroutine test_fb_solve_blk_lu
-      ! }}}
-
       subroutine test_fb_solve_lu(N)
          ! {{{
          integer (kind=4), intent(in) :: N
          real (kind=8), allocatable :: A(:,:),wrk(:,:)
          real (kind=8), allocatable :: b(:,:), x(:,:)
+         integer (kind=4), allocatable :: p(:)
 
          A = rand_mat(N,N)
          wrk = A
          b = rand_mat(N,1)
          x = b ! just allocating x
 
-         call fb_solve_lu(wrk,b,x)
+         call fb_solve_lu(wrk,b,x,p)
          !call print_array(x)
       
          x = matmul(A,x)-b
        
          print *,
-         print *, "Testing fb_solve_blk_lu:"
+         print *, "Testing fb_solve_lu:"
          print *, "Number of rows: ",N
-         print *, "2-norm of residual vector = ", norm_f(x)
+         print *, "2norm of residual vector = ", norm_p(x,2)
+         print *, "1 norm condition number = ", condest_lu(A,wrk,p)
+         print *, "1 norm relative error = ", condest_lu(A,wrk,p)*norm_p(x,1)/norm_p(b,1)
+ 
          !call print_array(x)
 
          deallocate(A,b,x)
@@ -366,5 +344,74 @@ program test
       ! }}}
 
 
+      subroutine test_fb_solve_blk_lu(N)
+         ! {{{
+         integer (kind=4), intent(in) :: N
+         real (kind=8), allocatable :: A(:,:), wrk(:,:)
+         real (kind=8), allocatable :: b(:,:), x(:,:)
+         integer (kind=4), allocatable :: p(:)
+
+         !real (kind=8), allocatable :: R(:,:), Rt(:,:)
+
+         A = 2d0*rand_mat(N,N)-1d0
+         wrk = A
+         b = rand_mat(N,1)
+         x = b ! just allocating x
+         
+         call fb_solve_blk_lu(wrk,b,x,p)
+         !call print_array(x)
+      
+         x = matmul(A,x)-b
+       
+         print *,
+         print *, "Testing fb_solve_blk_lu:"
+         print *, "Number of rows: ",N
+         print *, "2 norm of residual vector = ", norm_p(x,2)
+         print *, "1 norm condition number = ", condest_lu(A,wrk,p)
+         print *, "1 norm relative error = ", condest_lu(A,wrk,p)*norm_p(x,1)/norm_p(b,1)
+         !call print_array(x)
+
+         deallocate(A,b,x)
+
+      end subroutine test_fb_solve_blk_lu
+      ! }}}
+
+
+      subroutine test_condest_lu()
+         ! {{{
+         !integer (kind=4), intent(in) :: N
+
+         real (kind=8), allocatable :: A(:,:),wrk(:,:)
+         integer (kind=4), allocatable :: p(:)
+         !integer (kind=4) :: i
+
+         ! test matrix
+         ! K(A) = 1197.
+         allocate(A(2,2))
+         A(:,1) = (/ 1d0, -0.99d0 /)
+         A(:,2) = (/ -2d0, 1.99d0 /)
+         allocate(p(2))
+         p = (/ 1,2 /)
+         wrk = A
+         call lu(wrk,p)
+         call apply_perm_vector(wrk,p,0)
+
+         !A = 2d0*rand_mat(N,N)-1d0
+         !wrk = A
+         !allocate(p(N))
+         !p = (/ (i,i=1,N) /)
+         !call lu(wrk,p)
+
+         print *,
+         print *, "Testing condest_lu:"
+         print *, "Condition number should be 1197"
+         print *, condest_lu(A,wrk,p)
+
+      end subroutine test_condest_lu
+      ! }}}
+
 
 end program test
+
+! vim: set ts=3 sw=3 sts=3 et :
+! vim: foldmarker={{{,}}}

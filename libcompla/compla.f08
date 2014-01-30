@@ -2,10 +2,21 @@
 ! Computational Linear Algebra library
 ! James Folberth - Spring 2014
 
+! TODO make `block_size` global
+! TODO make (kind=8) statements something smarter
+
 ! wrap lib in module so it interfaces properly
 module compla
 
-   real (kind=8), parameter :: ZERO_TOL = 10**(-13)
+   real (kind=8), parameter :: ZERO_TOL = 10**(-14)
+
+   ! p-norm function overload
+   public norm_p
+   private norm_p_mat, norm_p_vec
+
+   interface norm_p
+      module procedure norm_p_mat, norm_p_vec
+   end interface
 
    contains
 
@@ -148,8 +159,6 @@ module compla
       integer (kind=4) :: p(:)
       
       integer (kind=4) :: i,j,k,Nc,Nr,m,temp_ind
-      real (kind=8) :: col_max
-      !real (kind=8), allocatable :: temp_row(:)
       integer (kind=4) :: singular
 
       Nc = size(A,1)
@@ -161,20 +170,22 @@ module compla
       end if
 
       singular = 0
-      ! TODO this overwrites existing p
+      
+      ! this overwrites existing p
       p = (/ (k,k=1,Nc) /)
+
       row: do k=1,Nc-1
 
          m = col_find_absmax(A,p,k)
          !If pivot is near zero, matrix is singular
-         if (abs(col_max) < ZERO_TOL) then
+         if (abs(A(p(m),k)) < ZERO_TOL) then
             print *, "UNTESTED"
             print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
             singular = 1
-            stop ! TODO should really keep going
+            stop ! TODO move row to bottom of array and keep going
 
          else
-            ! ``swap'' rows
+            ! swap rows
             temp_ind = p(k)
             p(k) = p(m)
             p(m) = temp_ind
@@ -631,9 +642,10 @@ module compla
 
    ! This routine is basically for testing purposes
    ! I'd probably want to use the block routine
-   subroutine fb_solve_lu(A,b,x)
+   subroutine fb_solve_lu(A,b,x,pvec)
       ! A is assumed to be a ``work array''
       real (kind=8) :: A(:,:), b(:,:), x(:,:)
+      integer (kind=4), allocatable, intent(out), optional :: pvec(:)
 
       integer (kind=4) :: Nr,Nc,i
       integer (kind=4), allocatable :: p(:)
@@ -657,11 +669,15 @@ module compla
       call for_solve_lu(A,x)
       call back_solve(A,x)
 
+      if (present(pvec)) pvec = p
+
    end subroutine fb_solve_lu
 
-   subroutine fb_solve_blk_lu(A,b,x)
+   subroutine fb_solve_blk_lu(A,b,x,pvec)
       ! A is assumed to be a ``work array''
+      ! pvec is optional argument to output permutation vector
       real (kind=8) :: A(:,:), b(:,:), x(:,:)
+      integer (kind=4), allocatable, intent(out), optional :: pvec(:)
 
       integer (kind=4) :: Nr,Nc,i
       integer (kind=4), allocatable :: p(:)
@@ -684,8 +700,152 @@ module compla
 
       call for_solve_lu_blk(A,x)
       call back_solve_blk(A,x)
+
+      if (present(pvec)) pvec = p
    
    end subroutine fb_solve_blk_lu
+
+   ! }}}
+
+
+   !!!!!!!!!!!!!!!!!
+   ! Vec/Mat Norms !
+   !!!!!!!!!!!!!!!!!
+   ! {{{
+   ! Frobenius matrix norm/vector 2-norm
+   function norm_f(A)
+      real (kind=8), intent(in) :: A(:,:)
+      real (kind=8) :: norm_f
+
+      integer (kind=4) :: i,j,Nr,Nc
+
+      Nr=size(A,1)
+      Nc=size(A,2)
+
+      norm_f = 0d0
+
+      row: do j=1,Nc
+         col: do i=1,Nr
+            norm_f = norm_f + A(i,j)*A(i,j)
+         end do col
+      end do row
+
+      norm_f = sqrt(norm_f)
+   
+   end function norm_f
+
+   ! vector p-norm
+   function norm_p_vec(A,p)
+      real (kind=8), intent(in) :: A(:)
+      integer (kind=4), intent(in) :: p
+      real (kind=8) :: norm_p_vec
+
+      ! 1 norm (max col sum)
+      if (p == 1) then
+         norm_p_vec = sum(abs(A(:)))
+
+      ! Infinity norm (max row sum)
+      else if (p == 0) then
+         norm_p_vec = maxval(abs(A(:)))
+
+      ! 2 norm 
+      else if (p == 2) then
+         norm_p_vec = norm2(A)
+
+      else
+         print *, "error: compla.f08: norm_p -> norm_p_vec: unsupported p-norm", p
+         stop
+
+      end if
+
+   end function norm_p_vec
+
+   ! Induced matrix p-norm
+   function norm_p_mat(A,p)
+      real (kind=8), intent(in) :: A(:,:)
+      integer (kind=4), intent(in) :: p
+      real (kind=8) :: norm_p_mat
+
+      real (kind=8) :: temp
+      integer (kind=4) :: i
+
+      norm_p_mat = 0d0
+
+      ! 1 norm (max col sum)
+      if (p == 1) then
+         row: do i=1,size(A,2)
+            temp = sum(abs(A(:,i)))
+            if (temp > norm_p_mat) then
+               norm_p_mat = temp
+            end if
+         end do row
+
+      ! Infinity norm (max row sum)
+      else if (p == 0) then
+         col: do i=1,size(A,1)
+            temp = sum(abs(A(i,:)))
+            if (temp > norm_p_mat) then
+               norm_p_mat = temp
+            end if
+         end do col
+
+      ! 2 norm (lol, do you really need the induced 2 norm)
+      else
+         if (size(A,2) == 1) then ! vector 2-norm
+            norm_p_mat = norm2(A)
+         else
+            stop "2-norm not implemented"
+         end if
+
+      end if
+
+   end function norm_p_mat
+
+   function condest_lu(A,wrk,pvec,Tin)
+      ! 1-norm condition number estimation
+      ! using LU overwritten on A with permutation vector pvec
+      !
+      ! Example:
+      !     A = rand_mat(100,100)
+      !     wrk = A
+      !     pvec = (/ (i,i=1,100) /)
+      !     call lu(wrk,pvec)
+      !     call apply_perm_vector(wrk,pvec,0)
+      !     print *, condest(A,wrk,pvec)
+       
+      real (kind=8), intent(in) :: A(:,:), wrk(:,:)
+      integer (kind=4), intent(in) :: pvec(:)
+      integer (kind=4), optional :: Tin
+
+      real (kind=8) :: condest_lu, temp
+      real (kind=8), allocatable :: w(:,:), w_temp(:,:)
+      integer (kind=4) :: T,i
+
+      T = 2
+      if (present(Tin)) T=Tin
+
+      condest_lu = 0d0
+
+      ! Try to estimate \|A^{-1}w\|_1 / \|w\|_1
+      do i=1,T
+         w = rand_mat(size(A,2),1)
+         w_temp = w
+
+         call apply_perm_vector(w_temp,pvec,0)
+         call for_solve_lu_blk(wrk,w_temp)
+         call back_solve_blk(wrk,w_temp)
+         
+         temp = norm_p(w_temp,1) / norm_p(w,1)
+         if (temp > condest_lu) condest_lu = temp
+
+      end do
+
+      ! Finally, multiply by \|A\|_1
+      condest_lu = condest_lu * norm_p(A,1)
+
+   end function condest_lu
+
+
 
    ! }}}
 
@@ -732,28 +892,24 @@ module compla
       end do row_print
    end subroutine print_array
 
-   ! Frobenius matrix norm/vector 2-norm
-   function norm_f(A)
-      real (kind=8), intent(in) :: A(:,:)
-      real (kind=8) :: norm_f
 
-      integer (kind=4) :: i,j,Nr,Nc
+   function rand_mat(Nr,Nc)
+      integer (kind=4), intent(in) :: Nr, Nc
+      real (kind=8), allocatable :: rand_mat(:,:)
 
-      Nr=size(A,1)
-      Nc=size(A,2)
+      real (kind=8) :: rand
+      integer (kind=4) :: i,j
 
-      norm_f = 0d0
+      allocate(rand_mat(Nr,Nc))
 
+      ! Populate with random numbers [0,1]
       row: do j=1,Nc
          col: do i=1,Nr
-            norm_f = norm_f + A(i,j)*A(i,j)
+            call random_number(rand)
+            rand_mat(i,j) = rand
          end do col
       end do row
-
-      norm_f = sqrt(norm_f)
-   
-   end function norm_f
-
+   end function rand_mat
 
    function rand_spd_mat(N)
       integer (kind=4), intent(in) :: N
@@ -787,26 +943,7 @@ module compla
 
    end function rand_spd_mat
 
-
-   function rand_mat(Nr,Nc)
-      integer (kind=4), intent(in) :: Nr, Nc
-      real (kind=8), allocatable :: rand_mat(:,:)
-
-      real (kind=8) :: rand
-      integer (kind=4) :: i,j
-
-      allocate(rand_mat(Nr,Nc))
-
-      ! Populate with random numbers [0,1]
-      row: do j=1,Nc
-         col: do i=1,Nr
-            call random_number(rand)
-            rand_mat(i,j) = rand
-         end do col
-      end do row
-   end function rand_mat
-
-   
+  
    subroutine init_random_seed()
      ! Stolen from http://gcc.gnu.org/onlinedocs/gfortran/RANDOM_005fSEED.html
      ! {{{
@@ -861,3 +998,6 @@ module compla
    ! }}}
 
 end module compla
+
+! vim: set ts=3 sw=3 sts=3 et :
+! vim: foldmarker={{{,}}}
