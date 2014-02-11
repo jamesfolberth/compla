@@ -80,6 +80,7 @@ program p03
          p(:) = (/ (i,i=1,N) /)
 
          wrk = A
+
          call lu(wrk,p)
          call apply_perm_vector(wrk,p,0)
 
