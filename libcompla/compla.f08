@@ -2,8 +2,8 @@
 ! Computational Linear Algebra library
 ! James Folberth - Spring 2014
 
-! TODO make `block_size` global
-! TODO make (kind=8) statements something smarter
+! TODO make `block_size` global (separate block sizes per algorithm)
+! TODO make (kind=8) statements something smarter (i.e portable)
 
 ! wrap lib in module so it interfaces properly
 module compla
@@ -182,7 +182,7 @@ module compla
             print *, "UNTESTED"
             print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
             singular = 1
-            stop ! TODO move row to bottom of array and keep going
+            stop ! TODO move row to bottom of array and try to keep going
 
          else
             ! swap rows
@@ -213,6 +213,74 @@ module compla
       end do row
          
    end subroutine lu
+
+
+   ! LU without partial pivoting
+   ! {{{
+   subroutine lu_nopp(A)
+      real (kind=8) :: A(:,:)
+      integer (kind=4), allocatable :: p(:)      
+
+      integer (kind=4) :: i,j,k,Nc,Nr,m
+      integer (kind=4) :: singular
+
+      Nc = size(A,1)
+      Nr = size(A,2)
+
+      if (Nc /= Nr ) then
+         print *, "error: compla.f08: lu: input matrix is not square"
+         stop
+      end if
+
+      singular = 0
+      
+      allocate(p(Nc))
+      p = (/ (k,k=1,Nc) /)
+
+      ! Note that I keep accessing (no swaps) the p 
+      ! vector instead of removing it; I don't care
+      ! about efficiency, since I'm never going to 
+      ! use this in a real code
+      row: do k=1,Nc-1
+
+         m = col_find_absmax(A,p,k)
+         !If pivot is near zero, matrix is singular
+         if (abs(A(p(m),k)) < ZERO_TOL) then
+            print *, "UNTESTED"
+            print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
+            singular = 1
+            stop ! TODO move row to bottom of array and try to keep going
+
+         else
+            ! swap rows
+            !temp_ind = p(k)
+            !p(k) = p(m)
+            !p(m) = temp_ind
+
+            multipliers: do i=k+1,Nc
+               A(p(i),k) = A(p(i),k) / A(p(k),k)
+               !print *,A(p(i),k)
+            end do multipliers
+
+            ! column oriented row operation
+            row_op: do j=k+1,Nc
+               do i=k+1,Nc
+                  A(p(i),j) = A(p(i),j) - A(p(i),k)*A(p(k),j)
+               end do
+            end do row_op
+
+         end if
+
+         ! check A(end,end)
+         if (abs(A(p(Nc),Nc)) < ZERO_TOL) then
+            print *, "warning: compla.f08: lu: input matrix is singular to within ZERO_TOL; U will be singular"
+            singular = 1
+            stop
+         end if
+      end do row
+         
+   end subroutine lu_nopp
+   ! }}}
 
 
    function col_find_absmax(A,p,k)

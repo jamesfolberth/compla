@@ -8,7 +8,7 @@ program test
    !call test_chol(100)
 
    ! Time row/col oriented Cholesky decomp
-   !call time_chol(1000)
+   call time_chol(1000)
   
    ! Forward and back solve with Cholesky decomp
    !call test_fb_solve_chol(100)
@@ -19,11 +19,14 @@ program test
    ! LU decomposition with partial pivoting
    !call test_lu(100)
 
+   ! LU decomposition WITHOUT partial pivoting
+   !call test_lu_nopp(100)
+
    ! forward and back solve (not by blocks) with LU decomp (not by blocks)
-   call test_fb_solve_lu(100)
+   !call test_fb_solve_lu(100)
    
    ! forward and back solve (by blocks) with LU decomp (not by blocks)
-   call test_fb_solve_blk_lu(100)
+   !call test_fb_solve_blk_lu(100)
 
    ! Test matrix condition number
    !call test_condest_lu()
@@ -311,7 +314,32 @@ program test
       end subroutine
       ! }}}
 
-         
+      subroutine test_lu_nopp(N)
+      ! {{{
+         integer (kind=4), intent(in) :: N
+
+         real (kind=8), allocatable :: A(:,:)
+         real (kind=8), allocatable :: wrk(:,:), L(:,:), U(:,:)
+
+         A = 2d0*rand_mat(N,N)-1d0
+         wrk = A
+
+         call lu_nopp(wrk)
+
+         allocate(L(size(A,1),size(A,2)),U(size(A,1),size(A,2)))
+         call form_LU(wrk,L,U)
+
+         wrk = matmul(L,U)
+         wrk = A - wrk ! A - L*U
+
+         print *,
+         print *, "Testing lu_nopp:"
+         print *, "Number of rows: ",N
+         print *, "1 norm of A-L*U: ", norm_p(wrk,1)
+
+      end subroutine test_lu_nopp
+      ! }}}
+
       subroutine test_fb_solve_lu(N)
          ! {{{
          integer (kind=4), intent(in) :: N
