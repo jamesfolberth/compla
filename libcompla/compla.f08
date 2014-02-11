@@ -278,7 +278,7 @@ module compla
             stop
          end if
       end do row
-         
+
    end subroutine lu_nopp
    ! }}}
 

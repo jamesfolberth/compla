@@ -8,7 +8,7 @@ program test
    !call test_chol(100)
 
    ! Time row/col oriented Cholesky decomp
-   call time_chol(1000)
+   !call time_chol(1000)
   
    ! Forward and back solve with Cholesky decomp
    !call test_fb_solve_chol(100)
@@ -17,7 +17,7 @@ program test
    !call test_fb_solve_blk_chol(100)
 
    ! LU decomposition with partial pivoting
-   !call test_lu(100)
+   call test_lu(100)
 
    ! LU decomposition WITHOUT partial pivoting
    !call test_lu_nopp(100)
@@ -303,7 +303,7 @@ program test
          call form_LU(wrk,L,U)
 
          wrk = matmul(L,U)
-         call apply_perm_vector(A,p,0)
+         call apply_perm_vector(wrk,p,1)
          wrk = A - wrk ! P*A - L*U
 
          print *,
@@ -313,6 +313,7 @@ program test
 
       end subroutine
       ! }}}
+
 
       subroutine test_lu_nopp(N)
       ! {{{
@@ -339,6 +340,7 @@ program test
 
       end subroutine test_lu_nopp
       ! }}}
+
 
       subroutine test_fb_solve_lu(N)
          ! {{{
