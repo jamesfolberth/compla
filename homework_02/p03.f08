@@ -46,9 +46,8 @@ program p03
          call apply_perm_vector(wrk,p,1)
          wrk = A - wrk ! P*A - L*U
 
+         print *, "Comparing lu,lu_nopp:"
          print *, "Number of rows: ",N
-         print *, "Inf norm of L (pp): ", norm_p(L,0)
-         print *, "Inf norm of U (pp): ", norm_p(U,0)
          print *, "Inf norm of P*A-L*U (pp): ", norm_p(wrk,0)
 
          wrk = A
@@ -80,6 +79,7 @@ program p03
          p(:) = (/ (i,i=1,N) /)
 
          wrk = A
+
          call lu(wrk,p)
          call apply_perm_vector(wrk,p,0)
 
