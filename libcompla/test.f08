@@ -17,7 +17,7 @@ program test
    !call test_fb_solve_blk_chol(100)
 
    ! LU decomposition with partial pivoting
-   call test_lu(100)
+   !call test_lu(100)
 
    ! LU decomposition WITHOUT partial pivoting
    !call test_lu_nopp(100)
@@ -30,6 +30,9 @@ program test
 
    ! Test matrix condition number
    !call test_condest_lu()
+
+   ! Test QR decomp by reflectors
+   call test_qr(100)
  
   
    ! {{{
@@ -438,6 +441,60 @@ program test
          print *, condest_lu(A,wrk,p)
 
       end subroutine test_condest_lu
+      ! }}}
+
+
+      subroutine test_qr(N)
+      ! {{{
+         integer (kind=4), intent(in) :: N
+
+         real (kind=8), allocatable :: A(:,:)
+         real (kind=8), allocatable :: wrk(:,:), x(:,:), b(:)
+         integer (kind=4) :: i
+
+         ! Manual test matrix
+         ! {{{
+         allocate(A(5,5),x(5,1),b(5))
+         A(:,1) = (/ 1,1,10,1,3 /)
+         A(:,2) = (/ 1,4,3,0,6 /)
+         A(:,3) = (/ 7,7,4,4,8 /)
+         A(:,4) = (/ 1,7,7,3,1 /)
+         A(:,5) = (/ 2,5,3,2,5 /)
+         x(:,1) = (/ 1,2,3,4,5 /)
+         x = matmul(A,x)
+         b(:) = x(:,1)
+
+         ! octave's qr
+         !  -10.583005   -5.008029   -7.748272   -7.937254   -5.102520
+         !    0.094491   -6.076154   -9.248685   -2.674389   -5.833695
+         !    0.944911   -0.359921    6.958888    2.552910    2.228844
+         !    0.094491   -0.085365   -0.508625   -5.685973   -1.267749
+         !    0.283473    0.731371    0.399906   -0.910104    0.597787
+
+         !allocate(p(5))
+         !p(:) = (/ (i,i=1,5) /)
+
+         !allocate(A(3,3))
+         !A(:,1) = (/ 2,4,8 /)
+         !A(:,2) = (/ 1,3,7 /)
+         !A(:,3) = (/ 1,3,9 /)
+         !allocate(p(3))
+         !p(:) = (/ (i,i=1,3) /)
+         ! }}}
+
+         call print_array(A)
+         wrk = A
+         call qr(wrk,b)
+         x(:,1) = b(:)
+         call print_array(wrk)
+         !print *,
+         !print *,"det(A) = ", wrk(1,1)*wrk(2,2)*wrk(3,3)*wrk(4,4)*wrk(5,5)
+
+         call back_solve_blk(wrk,x)
+         call print_array(x)
+
+
+      end subroutine test_qr
       ! }}}
 
 

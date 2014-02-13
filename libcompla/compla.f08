@@ -4,6 +4,8 @@
 
 ! TODO make `block_size` global (separate block sizes per algorithm)
 ! TODO make (kind=8) statements something smarter (i.e portable)
+! TODO make BLAS calls in chol/lu/qr
+! TODO overload print_array to print vectors as well
 
 ! wrap lib in module so it interfaces properly
 module compla
@@ -345,6 +347,81 @@ module compla
       end do row
 
    end subroutine form_LU
+   ! }}}
+
+
+   !!!!!!!!!!!!!
+   ! QR Decomp !
+   !!!!!!!!!!!!!
+   ! {{{
+   ! QR decomp by reflectors
+   ! Store u_k (to make Q) and R over A
+   ! assume first entry of each u_k is identically 1
+   subroutine qr(A,bin)
+      real (kind=8) :: A(:,:)
+      real (kind=8), optional :: bin(:)
+     
+      integer (kind=4) :: Nr,Nc,i,j,k
+      real (kind=8) :: gamm, beta, tau
+      real (kind=8), allocatable :: b(:),u(:),temp(:)
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+
+      allocate(u(Nc),temp(Nc),b(Nr))
+     
+      ! bin is the RHS of a linear system Ax=b
+      b = 0
+      if (present(bin)) b = bin
+
+      do k=1,Nc-1
+         beta = maxval(abs(A(k:Nr,k)))
+         if (beta <= ZERO_TOL) then
+            ! gamma = 0, Q_k = I, no multiplication required
+         else
+            ! calculate the reflector (Watkins 3.2.35)
+            u(k:Nc) = A(k:Nc,k) / beta
+            tau = norm_p_vec(u(k:Nc),2)
+            if (u(k)<0) tau = -tau
+            u(k) = u(k) + tau
+            gamm = u(k) / tau
+            u(k+1:Nc) = u(k+1:Nc) / u(k)
+            u(k) = 1d0
+            tau = tau*beta
+           
+            ! Compute Q_k*A_k:Nc,k+1:Nr
+            temp = 0
+            do i=k,Nc
+               do j=k+1,Nr
+                  temp(j) = temp(j)+u(i)*A(i,j)
+               end do
+            end do
+            temp = gamm*temp
+
+            do j=k+1,Nr
+               do i=k,Nc
+                  A(i,j) = A(i,j)-u(i)*temp(j)
+               end do
+            end do
+
+            ! Compute Q_k*b_k:Nc
+            temp(1) = 0
+            do i=k,Nc
+               temp(1) = temp(1) + u(i)*b(i)
+            end do
+            b(k:Nc) = b(k:Nc) - gamm*temp(1)*u(k:Nc)
+               
+           
+            ! Store reflector vectors over A (u_k=1 is assumed)
+            A(k,k) = -tau
+            A(k+1:Nc,k) = u(k+1:Nc)
+         end if
+      end do
+
+      if (present(bin)) bin = b
+
+   end subroutine qr
+
    ! }}}
 
 
