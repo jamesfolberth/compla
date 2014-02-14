@@ -6,6 +6,7 @@ AR=ar
 
 #FORTOPTS= -Wall -Wextra -fbounds-check 
 FORTOPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -O2
+#FORTOPTS= -Wall -funroll-loops -finline -ffast-math -O2
 
 LDLIBS= -lsatlas
 

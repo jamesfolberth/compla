@@ -4,8 +4,9 @@
 
 ! TODO make `block_size` global (separate block sizes per algorithm)
 ! TODO make (kind=8) statements something smarter (i.e portable)
-! TODO make BLAS calls in chol/lu/qr
+! TODO make BLAS (ATLAS) calls where possible
 ! TODO overload print_array to print vectors as well
+! TODO make vector 2-norm-squared function for QR decomp
 
 ! wrap lib in module so it interfaces properly
 module compla
@@ -379,7 +380,7 @@ module compla
          if (beta <= ZERO_TOL) then
             ! gamma = 0, Q_k = I, no multiplication required
          else
-            ! calculate the reflector (Watkins 3.2.35)
+            ! calculate the reflector (Watkins equation 3.2.35)
             u(k:Nc) = A(k:Nc,k) / beta
             tau = norm_p_vec(u(k:Nc),2)
             if (u(k)<0) tau = -tau
@@ -388,6 +389,11 @@ module compla
             u(k+1:Nc) = u(k+1:Nc) / u(k)
             u(k) = 1d0
             tau = tau*beta
+
+            if (abs(gamm) < ZERO_TOL) then
+               print *, "error: compla.f08: qr: input matrix is singular to within ZERO_TOL"
+               stop
+            end if
            
             ! Compute Q_k*A_k:Nc,k+1:Nr
             temp = 0
@@ -411,7 +417,6 @@ module compla
             end do
             b(k:Nc) = b(k:Nc) - gamm*temp(1)*u(k:Nc)
                
-           
             ! Store reflector vectors over A (u_k=1 is assumed)
             A(k,k) = -tau
             A(k+1:Nc,k) = u(k+1:Nc)
@@ -421,6 +426,53 @@ module compla
       if (present(bin)) bin = b
 
    end subroutine qr
+
+
+   ! Form Q,R from QR decomposition (this is expensive to call)
+   subroutine form_qr(A,Q,R)
+      real (kind=8) :: A(:,:), Q(:,:), R(:,:)
+
+      integer (kind=4) :: Nr,Nc, i,j,k
+      real (kind=8), allocatable :: u(:),temp(:)
+      real (kind=8) :: gamm
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+      Q = eye(Nr,Nc)
+
+      R = 0
+      allocate(u(Nc),temp(Nr))
+
+      ! R is just the upper triangle of A overwritten with \{u_k\} and R
+      do j=1,Nr
+         do i=1,j
+            R(i,j) = A(i,j)
+         end do
+      end do
+     
+      ! Apply Q_k's (which form Q^T, k=Nc-1,..,1) to I to find Q*I
+      ! Watkins exercise 3.2.44
+      do k=Nc-1,1,-1
+         temp = 0
+         u(k) = 1d0
+         u(k+1:Nc) = A(k+1:Nc,k)
+         gamm = 2/norm_p_vec(u(k:Nc),2)**2
+
+         do i=k,Nc
+            do j=k,Nr
+               temp(j) = temp(j)+u(i)*Q(i,j)
+            end do
+         end do
+         temp = gamm*temp
+
+         do j=k,Nr
+            do i=k,Nc
+               Q(i,j) = Q(i,j)-u(i)*temp(j)
+            end do
+         end do
+      end do
+
+   end subroutine form_qr
 
    ! }}}
 
@@ -1037,6 +1089,20 @@ module compla
       end do row_print
    end subroutine print_array
 
+   
+   function eye(Nr,Nc)
+      integer (kind=4), intent(in) :: Nr,Nc
+      real (kind=8), allocatable :: eye(:,:)
+
+      integer (kind=4) :: i
+
+      allocate(eye(Nr,Nc))
+      eye = 0
+      do i=1,min(Nr,Nc)
+         eye(i,i) = 1d0
+      end do
+
+   end function eye
 
    function rand_mat(Nr,Nc)
       integer (kind=4), intent(in) :: Nr, Nc
