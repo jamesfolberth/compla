@@ -8,7 +8,7 @@ program test
    !call test_chol(100)
 
    ! Time row/col oriented Cholesky decomp
-   !call time_chol(1000)
+   call time_chol(2000)
   
    ! Forward and back solve with Cholesky decomp
    !call test_fb_solve_chol(100)
@@ -32,7 +32,7 @@ program test
    !call test_condest_lu()
 
    ! Test QR decomp by reflectors
-   call test_qr(100)
+   !call test_qr(100)
  
   
    ! {{{
@@ -95,6 +95,23 @@ program test
          print *, "Number of rows: ",N
          print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
          
+         wrk = A
+         call chol_blas(wrk)
+         wrk = A - matmul(transpose(wrk),wrk)
+         print *,
+         print *, "Testing chol_blas:"
+         print *, "Number of rows: ",N
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
+ 
+         wrk = A
+         call chol_row(wrk)
+         wrk = A - matmul(transpose(wrk),wrk)
+         print *,
+         print *, "Testing chol_row:"
+         print *, "Number of rows: ",N
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
+         
+         
          deallocate(A)
       end subroutine test_chol
       ! }}}
@@ -104,7 +121,7 @@ program test
          ! {{{
          integer (kind=4), intent(in) :: N
 
-         real (kind=8), allocatable :: A(:,:), wrk(:,:)
+         real (kind=8), allocatable :: A(:,:), wrk(:,:), wrk2(:,:)
          real (kind=8) :: t_0, t_1
 
          if (allocated(A)) deallocate(A)
@@ -114,21 +131,37 @@ program test
          call cpu_time(t_0)
          call chol(wrk)
          call cpu_time(t_1)
-         wrk = A - matmul(transpose(wrk),wrk)
+
+         !wrk = A - matmul(transpose(wrk),wrk)
+         wrk2 = A
+         call dgemm('T','N',N,N,N,-1d0,wrk,N,wrk,N,1d0,wrk2,N)
          print *,
          print *, "Timing chol: ",t_1-t_0," CPU seconds"
          print *, "Number of rows: ",N
-         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk2,1)
+
+         wrk = A
+         call cpu_time(t_0)
+         call chol_blas(wrk)
+         call cpu_time(t_1)
+         
+         wrk2 = A
+         call dgemm('T','N',N,N,N,-1d0,wrk,N,wrk,N,1d0,wrk2,N)
+         print *,
+         print *, "Timing chol_blas: ",t_1-t_0," CPU seconds"
+         print *, "Number of rows: ",N
+         print *, "1 norm of A-R'*R: ", norm_p(wrk2,1)
 
          wrk = A
          call cpu_time(t_0)
          call chol_row(wrk)
          call cpu_time(t_1)
-         wrk = A - matmul(transpose(wrk),wrk)
+         wrk2 = A
+         call dgemm('T','N',N,N,N,-1d0,wrk,N,wrk,N,1d0,wrk2,N)
          print *,
          print *, "Timing chol_row: ",t_1-t_0," CPU seconds"
          print *, "Number of rows: ",N
-         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk2,1)
 
          deallocate(A,wrk)
       end subroutine time_chol

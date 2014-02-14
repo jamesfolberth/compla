@@ -88,6 +88,68 @@ module compla
          
    end subroutine chol
 
+   ! Outer product formulation with BLAS calls
+   subroutine chol_blas(A)
+   real (kind=8) :: A(:,:)
+
+   integer (kind=4) :: i,j,k,Nc
+
+   ! check that A is square
+   if (size(A,1) /= size(A,2)) then
+      print *, "error: compla.f08: chol_blas: input matrix is not square"
+      stop
+   end if
+
+   ! call check_sym(A)
+
+   ! parameter to store size(A,1)
+   Nc = size(A,1)
+
+   ! main Cholesky loop
+   ! Stores Cholesky factor in lower triangle of A, then transposes
+   recurse: do i=1,Nc-1
+      ! check a_{i,i} > 0
+      if (A(i,i) <= ZERO_TOL) then
+         print *, "error: compla.f08: chol_blas: input matrix is not positive definite"
+         stop
+      end if
+
+      A(i,i) = sqrt(A(i,i))
+      ! upper triangular
+      call dscal(Nc-i, 1d0/A(i,i), A(i,i+1), Nc) ! store in row
+      ! lower triangular
+      !call dscal(Nc-i, 1d0/A(i,i), A(i+1,i), 1) ! store in column
+      ! I guess fortran passes the whole array or something
+
+      ! Outer product A~ <- A^ - s*s**T
+      ! upper triangular
+      call dsyr('Upper', Nc-i, -1d0, A(i,i+1), Nc, A(i+1,i+1), Nc)
+      ! lower triangular
+      !call dsyr('Lower', Nc-i, -1d0, A(i+1,i), 1, A(i+1,i+1), Nc) 
+      ! Note: don't pass the submatrix A(i+1:Nc,i+1:Nc), since that is WAY slower than giving dsyr its staring point, dimension, and
+      ! leading dimension
+
+   end do recurse
+
+   if (A(Nc,Nc) <= ZERO_TOL) then
+      print *, "error: compla.f08: chol_blas: input matrix is not positive definite"
+      stop
+   end if
+  
+   A(Nc,Nc) = sqrt(A(Nc,Nc))
+
+   ! transpose A, then zero out strict lower triangle
+   ! lower triangular only
+   !A = transpose(A)
+   do j=1,Nc-1
+      !do i=j+1,Nc
+      !  A(i,j) = 0d0
+      !end do
+      call dscal(Nc-j, 0d0, A(j+1,j), 1)
+   end do
+         
+   end subroutine chol_blas
+
 
    ! Outer product formulation
    ! row oriented
@@ -1207,6 +1269,7 @@ module compla
 
    end subroutine init_random_seed
    ! }}}
+
 
 end module compla
 
