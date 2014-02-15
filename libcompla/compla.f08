@@ -92,7 +92,7 @@ module compla
    subroutine chol_blas(A)
    real (kind=8) :: A(:,:)
 
-   integer (kind=4) :: i,j,k,Nc
+   integer (kind=4) :: i,j,Nc
 
    ! check that A is square
    if (size(A,1) /= size(A,2)) then
@@ -459,8 +459,8 @@ module compla
            
             ! Compute Q_k*A_k:Nc,k+1:Nr
             temp = 0
-            do i=k,Nc
-               do j=k+1,Nr
+            do j=k+1,Nr
+               do i=k,Nc
                   temp(j) = temp(j)+u(i)*A(i,j)
                end do
             end do
@@ -489,12 +489,80 @@ module compla
 
    end subroutine qr
 
+   ! QR decomp by reflectors (BLAS calls)
+   ! Store u_k's (to make Q) and R over A
+   ! assume first entry of each u_k is identically 1
+   subroutine qr_blas(A,bin)
+      real (kind=8) :: A(:,:)
+      real (kind=8), optional :: bin(:)
+     
+      integer (kind=4) :: Nr,Nc,i,k
+      real (kind=8) :: gamm, beta, tau
+      real (kind=8), allocatable :: b(:),u(:),v(:),temp(:)
+
+      Nr = size(A,1)
+      Nc = size(A,2)
+
+      allocate(u(Nc),v(Nc),temp(Nc),b(Nr))
+     
+      ! bin is the RHS of a linear system Ax=b
+      b = 0
+      if (present(bin)) b = bin
+
+      do k=1,Nc-1
+         !beta = maxval(abs(A(k:Nr,k)))
+         beta = abs(A(k-1+idamax(Nr-k+1,A(k,k),1),k))
+         if (beta <= ZERO_TOL) then
+            ! gamma = 0, Q_k = I, no multiplication required
+         else
+            ! calculate the reflector (Watkins equation 3.2.35)
+            !u(k:Nc) = A(k:Nc,k) / beta
+            call dcopy(Nc-k+1,A(k,k),1,u(k),1)
+            call dscal(Nc-k+1,1d0/beta,u(k),1)
+            tau = norm_p_vec(u(k:Nc),2) ! I don't know what's wrong with dnrm2
+            if (u(k)<0) tau = -tau
+            u(k) = u(k) + tau
+            gamm = u(k) / tau
+            !u(k+1:Nc) = u(k+1:Nc) / u(k)
+            call dscal(Nc-k,1d0/u(k),u(k+1),1)
+            u(k) = 1d0
+            tau = tau*beta
+
+            if (abs(gamm) < ZERO_TOL) then
+               print *, "error: compla.f08: qr_blas: input matrix is singular to within ZERO_TOL"
+               stop
+            end if
+           
+            ! Compute Q_k*A_k:Nc,k+1:Nr
+            ! u**T*A = (A**T*u)**T
+            call dgemv('T',Nc-k+1,Nc-k,1d0,A(k,k+1),Nc,u(k),1,0d0,temp(k+1),1)
+            ! finish the rank-one update
+            call dger(Nc-k+1,Nc-k, -gamm,u(k),1,temp(k+1),1,A(k,k+1),Nc)
+
+            ! Compute Q_k*b_k:Nc
+            temp(1) = 0
+            do i=k,Nc
+               temp(1) = temp(1) + u(i)*b(i)
+            end do
+            b(k:Nc) = b(k:Nc) - gamm*temp(1)*u(k:Nc)
+               
+            ! Store reflector vectors over A (u_k=1 is assumed)
+            A(k,k) = -tau
+            !A(k+1:Nc,k) = u(k+1:Nc)
+            call dcopy(Nc-k,u(k+1),1,A(k+1,k),1)
+         end if
+      end do
+
+      if (present(bin)) bin = b
+
+   end subroutine qr_blas
+
 
    ! Form Q,R from QR decomposition (this is expensive to call)
    subroutine form_qr(A,Q,R)
       real (kind=8) :: A(:,:), Q(:,:), R(:,:)
 
-      integer (kind=4) :: Nr,Nc, i,j,k
+      integer (kind=4) :: Nr,Nc, j,k
       real (kind=8), allocatable :: u(:),temp(:)
       real (kind=8) :: gamm
 
@@ -507,9 +575,10 @@ module compla
 
       ! R is just the upper triangle of A overwritten with \{u_k\} and R
       do j=1,Nr
-         do i=1,j
-            R(i,j) = A(i,j)
-         end do
+         !do i=1,j
+         !   R(i,j) = A(i,j)
+         !end do
+         call dcopy(j,A(1,j),1,R(1,j),1)
       end do
      
       ! Apply Q_k's (which form Q^T, k=Nc-1,..,1) to I to find Q*I
@@ -517,21 +586,28 @@ module compla
       do k=Nc-1,1,-1
          temp = 0
          u(k) = 1d0
-         u(k+1:Nc) = A(k+1:Nc,k)
+         !u(k+1:Nc) = A(k+1:Nc,k)
+         call dcopy(Nc-k,A(k+1,k),1,u(k+1),1)
          gamm = 2/norm_p_vec(u(k:Nc),2)**2
 
-         do i=k,Nc
-            do j=k,Nr
-               temp(j) = temp(j)+u(i)*Q(i,j)
-            end do
-         end do
-         temp = gamm*temp
+         !do i=k,Nc
+         !   do j=k,Nr
+         !      temp(j) = temp(j)+u(i)*Q(i,j)
+         !   end do
+         !end do
+         !temp = gamm*temp
 
-         do j=k,Nr
-            do i=k,Nc
-               Q(i,j) = Q(i,j)-u(i)*temp(j)
-            end do
-         end do
+         !do j=k,Nr
+         !   do i=k,Nc
+         !      Q(i,j) = Q(i,j)-u(i)*temp(j)
+         !   end do
+         !end do
+
+         ! u**T*Q = (Q**T*u)**T
+         call dgemv('T',Nc-k+1,Nc-k+1,1d0,Q(k,k),Nc,u(k),1,0d0,temp(k),1)
+         ! finish the rank-one update
+         call dger(Nc-k+1,Nc-k+1, -gamm,u(k),1,temp(k),1,Q(k,k),Nc)
+
       end do
 
    end subroutine form_qr

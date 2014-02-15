@@ -8,7 +8,7 @@ program test
    !call test_chol(100)
 
    ! Time row/col oriented Cholesky decomp
-   call time_chol(2000)
+   !call time_chol(2000)
   
    ! Forward and back solve with Cholesky decomp
    !call test_fb_solve_chol(100)
@@ -32,7 +32,7 @@ program test
    !call test_condest_lu()
 
    ! Test QR decomp by reflectors
-   !call test_qr(100)
+   call test_qr(2000)
  
   
    ! {{{
@@ -482,7 +482,9 @@ program test
          integer (kind=4), intent(in) :: N
 
          real (kind=8), allocatable :: A(:,:), Q(:,:), R(:,:)
-         real (kind=8), allocatable :: wrk(:,:), x(:,:), b(:)
+         real (kind=8), allocatable :: wrk(:,:), wrk2(:,:), x(:,:), b(:), b2(:)
+
+         real (kind=8) :: t_0, t_1
 
          ! Manual test matrix
          ! {{{
@@ -507,30 +509,52 @@ program test
          ! octave's doesn't match mine with QR overwritten on A, but when I/octave form Q,R, they're the same
          ! }}}
 
+         allocate(Q(N,N),R(N,N))
          A = 2d0*rand_mat(N,N)-1d0
          x = 2d0*rand_mat(N,1)-1d0
          x = matmul(A,x)
          b = x(:,1)
+         b2 = b
          wrk = A
 
-         !call print_array(A)
          wrk = A
-         call qr(wrk,b)
-         x(:,1) = b(:)
-         !call print_array(wrk)
+         call cpu_time(t_0)
+         call qr(wrk,b2)
+         call cpu_time(t_1)
+         x(:,1) = b2(:)
 
-         call back_solve_blk(wrk,x)
-         !call print_array(x)
-
-         allocate(Q(N,N),R(N,N))
          call form_qr(wrk,Q,R)
-         wrk = A-matmul(Q,R)
-
+         !wrk = A-matmul(Q,R)
+         wrk2 = A
+         call dgemm('N','N',N,N,N,-1d0,Q,N,R,N,1d0,wrk2,N)
          print *,
          print *, "Testing qr:"
          print *, "Number of rows (SQUARE): ",N
-         print *, "1 norm of A-Q*R: ", norm_p(wrk,1)
+         print *, "qr time: ",t_1-t_0," CPU seconds"
+         print *, "1 norm of A-Q*R: ", norm_p(wrk2,1)
 
+
+         b2 = b
+         wrk = A
+
+         wrk = A
+         call cpu_time(t_0)
+         call qr_blas(wrk,b)
+         call cpu_time(t_1)
+         x(:,1) = b2(:)
+
+         !call back_solve_blk(wrk,x)
+         !call print_array(x)
+
+         call form_qr(wrk,Q,R)
+         !wrk = A-matmul(Q,R)
+         wrk2 = A
+         call dgemm('N','N',N,N,N,-1d0,Q,N,R,N,1d0,wrk2,N)
+         print *,
+         print *, "Testing qr_blas:"
+         print *, "Number of rows (SQUARE): ",N
+         print *, "qr_blas time: ",t_1-t_0," CPU seconds"
+         print *, "1 norm of A-Q*R: ", norm_p(wrk2,1)
 
 
          !call print_array(Q)
