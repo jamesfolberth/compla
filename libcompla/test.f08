@@ -3,6 +3,7 @@ program test
    implicit none
 
    call init_random_seed()
+   !call openblas_set_num_threads(1)
 
    ! Cholesky decomposition
    !call test_chol(100)
@@ -32,7 +33,10 @@ program test
    !call test_condest_lu()
 
    ! Test QR decomp by reflectors
-   call test_qr(2000)
+   call test_qr(1500,1325)
+
+   ! Time dgemm from whichever BLAS implementation you linked with
+   !call time_dgemm(5000)
  
   
    ! {{{
@@ -476,12 +480,11 @@ program test
       end subroutine test_condest_lu
       ! }}}
 
-
-      subroutine test_qr(N)
-      ! {{{
-         integer (kind=4), intent(in) :: N
-
-         real (kind=8), allocatable :: A(:,:), Q(:,:), R(:,:)
+      
+      subroutine test_qr(Nr,Nc) 
+         ! {{{ 
+         integer (kind=4), intent(in) :: Nr,Nc
+         real (kind=8), allocatable :: A(:,:), Q(:,:), R(:,:) 
          real (kind=8), allocatable :: wrk(:,:), wrk2(:,:), x(:,:), b(:), b2(:)
 
          real (kind=8) :: t_0, t_1
@@ -489,12 +492,19 @@ program test
          ! Manual test matrix
          ! {{{
          !allocate(A(5,5),x(5,1),b(5))
+         !allocate(A(6,5))
          !allocate(Q(5,5),R(5,5))
          !A(:,1) = (/ 1,1,10,1,3 /)
          !A(:,2) = (/ 1,4,3,0,6 /)
          !A(:,3) = (/ 7,7,4,4,8 /)
          !A(:,4) = (/ 1,7,7,3,1 /)
          !A(:,5) = (/ 2,5,3,2,5 /)
+
+         !A(:,1) = (/ 1,1,10,1,3,4 /)
+         !A(:,2) = (/ 1,4,3,0,6,2 /)
+         !A(:,3) = (/ 7,7,4,4,8,1 /)
+         !A(:,4) = (/ 1,7,7,3,1,5 /)
+         !A(:,5) = (/ 2,5,3,2,5,1 /)
          !x(:,1) = (/ 1,2,3,4,5 /)
          !x = matmul(A,x)
          !b(:) = x(:,1)
@@ -509,50 +519,55 @@ program test
          ! octave's doesn't match mine with QR overwritten on A, but when I/octave form Q,R, they're the same
          ! }}}
 
-         allocate(Q(N,N),R(N,N))
-         A = 2d0*rand_mat(N,N)-1d0
-         x = 2d0*rand_mat(N,1)-1d0
-         x = matmul(A,x)
-         b = x(:,1)
-         b2 = b
-         wrk = A
+         allocate(Q(Nr,Nr),R(Nr,Nc))
+         A = 2d0*rand_mat(Nr,Nc)-1d0
+         !x = 2d0*rand_mat(M,1)-1d0
+         !x = matmul(A,x)
+         !b = x(:,1)
+         !b2 = b
+         !wrk = A
 
          wrk = A
          call cpu_time(t_0)
-         call qr(wrk,b2)
+         !call qr(wrk,b2)
+         call qr(wrk)
          call cpu_time(t_1)
-         x(:,1) = b2(:)
+         !call print_array(wrk)
+         !x(:,1) = b2(:)
 
          call form_qr(wrk,Q,R)
+         !call print_array(Q)
+         !call print_array(R)
          !wrk = A-matmul(Q,R)
          wrk2 = A
-         call dgemm('N','N',N,N,N,-1d0,Q,N,R,N,1d0,wrk2,N)
+         call dgemm('N','N',Nr,Nc,Nr,-1d0,Q,Nr,R,Nr,1d0,wrk2,Nr)
          print *,
          print *, "Testing qr:"
-         print *, "Number of rows (SQUARE): ",N
+         print *, "Size: ",Nr,"x ",Nc
          print *, "qr time: ",t_1-t_0," CPU seconds"
          print *, "1 norm of A-Q*R: ", norm_p(wrk2,1)
 
-
-         b2 = b
-         wrk = A
+         !b2 = b
+         !wrk = A
 
          wrk = A
          call cpu_time(t_0)
-         call qr_blas(wrk,b)
+         !call qr_blas(wrk,b)
+         call qr_blas(wrk)
          call cpu_time(t_1)
-         x(:,1) = b2(:)
+         !call print_array(wrk)
+         !x(:,1) = b2(:)
 
-         !call back_solve_blk(wrk,x)
-         !call print_array(x)
+         !!call back_solve_blk(wrk,x)
+         !!call print_array(x)
 
          call form_qr(wrk,Q,R)
-         !wrk = A-matmul(Q,R)
+         !!wrk = A-matmul(Q,R)
          wrk2 = A
-         call dgemm('N','N',N,N,N,-1d0,Q,N,R,N,1d0,wrk2,N)
+         call dgemm('N','N',Nr,Nc,Nr,-1d0,Q,Nr,R,Nr,1d0,wrk2,Nr)
          print *,
          print *, "Testing qr_blas:"
-         print *, "Number of rows (SQUARE): ",N
+         print *, "Size: ",Nr,"x ",Nc
          print *, "qr_blas time: ",t_1-t_0," CPU seconds"
          print *, "1 norm of A-Q*R: ", norm_p(wrk2,1)
 
@@ -563,6 +578,32 @@ program test
 
    
       end subroutine test_qr
+      ! }}}
+
+
+      subroutine time_dgemm(N)
+      ! {{{
+         integer (kind=4), intent(in) :: N
+
+         real (kind=8), allocatable :: A(:,:)
+         real (kind=8), allocatable :: wrk(:,:)
+
+         real (kind=8) :: t_0, t_1
+
+         A = 2d0*rand_mat(N,N)-1d0
+         wrk = A
+
+         call cpu_time(t_0)
+         call dgemm('N','N',N,N,N,1d0,A,N,A,N,1d0,wrk,N)
+         call cpu_time(t_1)
+
+         ! This is for ATLAS LAPACK v. openBLAS LAPACK 
+         print *, 
+         print *, "Timing dgemm:"
+         print *, "Number of rows (SQUARE): ",N
+         print *, "dgemm time: ",t_1-t_0," CPU seconds"
+   
+      end subroutine time_dgemm
       ! }}}
 
 

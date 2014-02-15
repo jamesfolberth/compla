@@ -2,11 +2,12 @@
 ! Computational Linear Algebra library
 ! James Folberth - Spring 2014
 
-! TODO make `block_size` global (separate block sizes per algorithm)
+! TODO make `block_size` global (separate block sizes per algorithm?)
 ! TODO make (kind=8) statements something smarter (i.e portable)
 ! TODO make BLAS (ATLAS) calls where possible
 ! TODO overload print_array to print vectors as well
 ! TODO make vector 2-norm-squared function for QR decomp
+! TODO take care of b in QR decomposition (loop and blas)
 
 ! wrap lib in module so it interfaces properly
 module compla
@@ -431,24 +432,24 @@ module compla
       Nr = size(A,1)
       Nc = size(A,2)
 
-      allocate(u(Nc),temp(Nc),b(Nr))
+      allocate(u(Nr),temp(Nr),b(Nr))
      
       ! bin is the RHS of a linear system Ax=b
       b = 0
       if (present(bin)) b = bin
 
-      do k=1,Nc-1
+      do k=1,Nc
          beta = maxval(abs(A(k:Nr,k)))
          if (beta <= ZERO_TOL) then
             ! gamma = 0, Q_k = I, no multiplication required
          else
             ! calculate the reflector (Watkins equation 3.2.35)
-            u(k:Nc) = A(k:Nc,k) / beta
-            tau = norm_p_vec(u(k:Nc),2)
+            u(k:Nr) = A(k:Nr,k) / beta
+            tau = norm_p_vec(u(k:Nr),2)
             if (u(k)<0) tau = -tau
             u(k) = u(k) + tau
             gamm = u(k) / tau
-            u(k+1:Nc) = u(k+1:Nc) / u(k)
+            u(k+1:Nr) = u(k+1:Nr) / u(k)
             u(k) = 1d0
             tau = tau*beta
 
@@ -459,29 +460,29 @@ module compla
            
             ! Compute Q_k*A_k:Nc,k+1:Nr
             temp = 0
-            do j=k+1,Nr
-               do i=k,Nc
+            do j=k+1,Nc
+               do i=k,Nr
                   temp(j) = temp(j)+u(i)*A(i,j)
                end do
             end do
             temp = gamm*temp
 
-            do j=k+1,Nr
-               do i=k,Nc
+            do j=k+1,Nc
+               do i=k,Nr
                   A(i,j) = A(i,j)-u(i)*temp(j)
                end do
             end do
 
             ! Compute Q_k*b_k:Nc
             temp(1) = 0
-            do i=k,Nc
+            do i=k,Nr
                temp(1) = temp(1) + u(i)*b(i)
             end do
-            b(k:Nc) = b(k:Nc) - gamm*temp(1)*u(k:Nc)
+            b(k:Nr) = b(k:Nr) - gamm*temp(1)*u(k:Nr)
                
             ! Store reflector vectors over A (u_k=1 is assumed)
             A(k,k) = -tau
-            A(k+1:Nc,k) = u(k+1:Nc)
+            A(k+1:Nr,k) = u(k+1:Nr)
          end if
       end do
 
@@ -503,13 +504,13 @@ module compla
       Nr = size(A,1)
       Nc = size(A,2)
 
-      allocate(u(Nc),v(Nc),temp(Nc),b(Nr))
+      allocate(u(Nr),v(Nr),temp(Nr),b(Nr))
      
       ! bin is the RHS of a linear system Ax=b
       b = 0
       if (present(bin)) b = bin
 
-      do k=1,Nc-1
+      do k=1,Nc
          !beta = maxval(abs(A(k:Nr,k)))
          beta = abs(A(k-1+idamax(Nr-k+1,A(k,k),1),k))
          if (beta <= ZERO_TOL) then
@@ -517,14 +518,14 @@ module compla
          else
             ! calculate the reflector (Watkins equation 3.2.35)
             !u(k:Nc) = A(k:Nc,k) / beta
-            call dcopy(Nc-k+1,A(k,k),1,u(k),1)
-            call dscal(Nc-k+1,1d0/beta,u(k),1)
-            tau = norm_p_vec(u(k:Nc),2) ! I don't know what's wrong with dnrm2
+            call dcopy(Nr-k+1,A(k,k),1,u(k),1)
+            call dscal(Nr-k+1,1d0/beta,u(k),1)
+            tau = norm_p_vec(u(k:Nr),2) 
             if (u(k)<0) tau = -tau
             u(k) = u(k) + tau
             gamm = u(k) / tau
             !u(k+1:Nc) = u(k+1:Nc) / u(k)
-            call dscal(Nc-k,1d0/u(k),u(k+1),1)
+            call dscal(Nr-k,1d0/u(k),u(k+1),1)
             u(k) = 1d0
             tau = tau*beta
 
@@ -535,21 +536,24 @@ module compla
            
             ! Compute Q_k*A_k:Nc,k+1:Nr
             ! u**T*A = (A**T*u)**T
-            call dgemv('T',Nc-k+1,Nc-k,1d0,A(k,k+1),Nc,u(k),1,0d0,temp(k+1),1)
-            ! finish the rank-one update
-            call dger(Nc-k+1,Nc-k, -gamm,u(k),1,temp(k+1),1,A(k,k+1),Nc)
+            !print *, Nr-k+1,Nc-k
+            if (k < Nc) then
+               call dgemv('T',Nr-k+1,Nc-k,1d0,A(k,k+1),Nr,u(k),1,0d0,temp(k+1),1)
+               ! finish the rank-one update
+               call dger(Nr-k+1,Nc-k, -gamm,u(k),1,temp(k+1),1,A(k,k+1),Nr)
 
-            ! Compute Q_k*b_k:Nc
-            temp(1) = 0
-            do i=k,Nc
-               temp(1) = temp(1) + u(i)*b(i)
-            end do
-            b(k:Nc) = b(k:Nc) - gamm*temp(1)*u(k:Nc)
+               ! Compute Q_k*b_k:Nc
+               temp(1) = 0
+               do i=k,Nr
+                  temp(1) = temp(1) + u(i)*b(i)
+               end do
+               b(k:Nr) = b(k:Nr) - gamm*temp(1)*u(k:Nr)
+            end if
                
             ! Store reflector vectors over A (u_k=1 is assumed)
             A(k,k) = -tau
-            !A(k+1:Nc,k) = u(k+1:Nc)
-            call dcopy(Nc-k,u(k+1),1,A(k+1,k),1)
+            !A(k+1:Nr,k) = u(k+1:Nr)
+            call dcopy(Nr-k,u(k+1),1,A(k+1,k),1)
          end if
       end do
 
@@ -568,13 +572,13 @@ module compla
 
       Nr = size(A,1)
       Nc = size(A,2)
-      Q = eye(Nr,Nc)
+      Q = eye(Nr,Nr)
 
       R = 0
-      allocate(u(Nc),temp(Nr))
+      allocate(u(Nr),temp(Nr))
 
       ! R is just the upper triangle of A overwritten with \{u_k\} and R
-      do j=1,Nr
+      do j=1,Nc
          !do i=1,j
          !   R(i,j) = A(i,j)
          !end do
@@ -583,12 +587,12 @@ module compla
      
       ! Apply Q_k's (which form Q^T, k=Nc-1,..,1) to I to find Q*I
       ! Watkins exercise 3.2.44
-      do k=Nc-1,1,-1
+      do k=Nc,1,-1
          temp = 0
          u(k) = 1d0
          !u(k+1:Nc) = A(k+1:Nc,k)
-         call dcopy(Nc-k,A(k+1,k),1,u(k+1),1)
-         gamm = 2/norm_p_vec(u(k:Nc),2)**2
+         call dcopy(Nr-k,A(k+1,k),1,u(k+1),1)
+         gamm = 2/norm_p_vec(u(k:Nr),2)**2
 
          !do i=k,Nc
          !   do j=k,Nr
@@ -604,9 +608,9 @@ module compla
          !end do
 
          ! u**T*Q = (Q**T*u)**T
-         call dgemv('T',Nc-k+1,Nc-k+1,1d0,Q(k,k),Nc,u(k),1,0d0,temp(k),1)
+         call dgemv('T',Nr-k+1,Nr-k+1,1d0,Q(k,k),Nr,u(k),1,0d0,temp(k),1)
          ! finish the rank-one update
-         call dger(Nc-k+1,Nc-k+1, -gamm,u(k),1,temp(k),1,Q(k,k),Nc)
+         call dger(Nr-k+1,Nr-k+1, -gamm,u(k),1,temp(k),1,Q(k,k),Nr)
 
       end do
 

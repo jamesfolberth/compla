@@ -5,10 +5,12 @@ FORT=gfortran
 AR=ar
 
 #FORTOPTS= -Wall -Wextra -fbounds-check 
-FORTOPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -O2
+FORTOPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -march=native -mtune=native -O2
 #FORTOPTS= -Wall -O3
 
 LDLIBS= -lsatlas
+#LDLIBS= -ltatlas 
+#LDLIBS= -lblas # openBLAS
 
 #all: compla.a
 all: libcompla.so 
