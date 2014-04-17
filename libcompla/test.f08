@@ -24,16 +24,16 @@ program test
    !call test_lu_nopp(100)
 
    ! forward and back solve (not by blocks) with LU decomp (not by blocks)
-   !call test_fb_solve_lu(100)
+   call test_fb_solve_lu(100)
    
    ! forward and back solve (by blocks) with LU decomp (not by blocks)
-   !call test_fb_solve_blk_lu(100)
+   call test_fb_solve_blk_lu(100)
 
    ! Test matrix condition number
    !call test_condest_lu()
 
    ! Test QR decomp by reflectors
-   call test_qr(1500,1325)
+   !call test_qr(1500,1325)
 
    ! Time dgemm from whichever BLAS implementation you linked with
    !call time_dgemm(5000)

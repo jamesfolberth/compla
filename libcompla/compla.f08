@@ -2,7 +2,7 @@
 ! Computational Linear Algebra library
 ! James Folberth - Spring 2014
 
-! TODO make `block_size` global (separate block sizes per algorithm?)
+! TODO make `block_size` global (separate block sizes per algorithm)
 ! TODO make (kind=8) statements something smarter (i.e portable)
 ! TODO make BLAS (ATLAS) calls where possible
 ! TODO overload print_array to print vectors as well
@@ -650,7 +650,7 @@ module compla
    subroutine back_solve_blk(U,b)
       real (kind=8) :: U(:,:), b(:,:)
 
-      integer (kind=4), parameter :: blk_size=4
+      integer (kind=4), parameter :: blk_size=8
       integer (kind=4) :: i,j,s,Nc
       integer (kind=4) :: il, ih, jl, jh
 
