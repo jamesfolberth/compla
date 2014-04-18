@@ -38,10 +38,9 @@ module compla
                        dwrite_dset_rank2, dwrite_dset_rank0
    end interface write_dset
 
-
-
    ! BLAS
-   integer, external :: idamax
+   integer (kind=intk), external :: idamax
+
 
    contains
 
@@ -456,8 +455,11 @@ module compla
       allocate(u(Nr),temp(Nr),b(Nr))
      
       ! bin is the RHS of a linear system Ax=b
-      b = 0
-      if (present(bin)) b = bin
+      if (present(bin)) then
+         b = bin
+      else 
+         b = 0_dblk
+      end if
 
       do k=1,Nc
          beta = maxval(abs(A(k:Nr,k)))
@@ -528,8 +530,11 @@ module compla
       allocate(u(Nr),v(Nr),temp(Nr),b(Nr))
      
       ! bin is the RHS of a linear system Ax=b
-      b = 0
-      if (present(bin)) b = bin
+      if (present(bin)) then
+         b = bin
+      else 
+         b = 0_dblk
+      end if
 
       do k=1,Nc
          !beta = maxval(abs(A(k:Nr,k)))

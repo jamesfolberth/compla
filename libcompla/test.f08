@@ -10,6 +10,7 @@ program test
 
    ! Time row/col oriented Cholesky decomp
    !call time_chol(2000)
+   !call time_chol(200)
   
    ! Forward and back solve with Cholesky decomp
    !call test_fb_solve_chol(100)
@@ -33,13 +34,15 @@ program test
    !call test_condest_lu()
 
    ! Test QR decomp by reflectors
-   call test_qr(150,132)
+   !call test_qr(1500,1325)
+   !call test_qr(150,132)
 
    ! Time dgemm from whichever BLAS implementation you linked with
    !call time_dgemm(5000)
+   !call time_dgemm(1000)
 
    ! Test saving data to HDF5 file
-   !call test_save_stuff(100)
+   call test_save_stuff(10)
  
   
    ! {{{
@@ -94,30 +97,32 @@ program test
          !print *, norm_f(A-matmul(transpose(wrk),wrk))
          ! }}}
      
-         wrk = A
-         call chol(wrk)
-         wrk = A - matmul(transpose(wrk),wrk)
          print *,
          print *, "Testing chol:"
          print *, "Number of rows: ",N
-         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
-         
+ 
          wrk = A
-         call chol_blas(wrk)
+         call chol(wrk)
          wrk = A - matmul(transpose(wrk),wrk)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
+        
          print *,
          print *, "Testing chol_blas:"
          print *, "Number of rows: ",N
-         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
  
          wrk = A
-         call chol_row(wrk)
+         call chol_blas(wrk)
          wrk = A - matmul(transpose(wrk),wrk)
+         print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
+
          print *,
          print *, "Testing chol_row:"
          print *, "Number of rows: ",N
+
+         wrk = A
+         call chol_row(wrk)
+         wrk = A - matmul(transpose(wrk),wrk)
          print *, "1 norm of A-R'*R: ", norm_p(wrk,1)
-         
          
          deallocate(A)
       end subroutine test_chol
@@ -131,6 +136,10 @@ program test
          real (kind=8), allocatable :: A(:,:), wrk(:,:), wrk2(:,:)
          real (kind=8) :: t_0, t_1
 
+         print *,
+         print *, "Timing chol: ",t_1-t_0," CPU seconds"
+         print *, "Number of rows: ",N
+ 
          if (allocated(A)) deallocate(A)
          A = rand_spd_mat(N)
 
@@ -142,11 +151,13 @@ program test
          !wrk = A - matmul(transpose(wrk),wrk)
          wrk2 = A
          call dgemm('T','N',N,N,N,-1d0,wrk,N,wrk,N,1d0,wrk2,N)
-         print *,
-         print *, "Timing chol: ",t_1-t_0," CPU seconds"
-         print *, "Number of rows: ",N
          print *, "1 norm of A-R'*R: ", norm_p(wrk2,1)
 
+
+         print *,
+         print *, "Timing chol_blas: ",t_1-t_0," CPU seconds"
+         print *, "Number of rows: ",N
+ 
          wrk = A
          call cpu_time(t_0)
          call chol_blas(wrk)
@@ -154,20 +165,19 @@ program test
          
          wrk2 = A
          call dgemm('T','N',N,N,N,-1d0,wrk,N,wrk,N,1d0,wrk2,N)
-         print *,
-         print *, "Timing chol_blas: ",t_1-t_0," CPU seconds"
-         print *, "Number of rows: ",N
          print *, "1 norm of A-R'*R: ", norm_p(wrk2,1)
 
+
+         print *,
+         print *, "Timing chol_row: ",t_1-t_0," CPU seconds"
+         print *, "Number of rows: ",N
+ 
          wrk = A
          call cpu_time(t_0)
          call chol_row(wrk)
          call cpu_time(t_1)
          wrk2 = A
          call dgemm('T','N',N,N,N,-1d0,wrk,N,wrk,N,1d0,wrk2,N)
-         print *,
-         print *, "Timing chol_row: ",t_1-t_0," CPU seconds"
-         print *, "Number of rows: ",N
          print *, "1 norm of A-R'*R: ", norm_p(wrk2,1)
 
          deallocate(A,wrk)
@@ -181,6 +191,10 @@ program test
          real (kind=8), allocatable :: A(:,:), wrk(:,:)
          real (kind=8), allocatable :: b(:,:), x(:,:)
 
+         print *,
+         print *, "Testing fb_solve_chol:"
+         print *, "Number of rows: ",N
+ 
          if (allocated(A)) deallocate(A)
          if (allocated(b)) deallocate(b)
          if (allocated(x)) deallocate(x)
@@ -231,9 +245,6 @@ program test
       
          x = matmul(A,x)-b
        
-         print *,
-         print *, "Testing fb_solve_chol:"
-         print *, "Number of rows: ",N
          print *, "2-norm of residual vector = ", norm_p(x,2)
          !call print_array(x)
 
@@ -251,6 +262,10 @@ program test
 
          !real (kind=8), allocatable :: R(:,:), Rt(:,:)
 
+         print *,
+         print *, "Testing fb_solve_blk_chol:"
+         print *, "Number of rows: ",N
+ 
          A = rand_spd_mat(N)
          b = rand_mat(N,1)
          x = b ! just allocating x
@@ -293,9 +308,6 @@ program test
       
          x = matmul(A,x)-b
        
-         print *,
-         print *, "Testing fb_solve_blk_chol:"
-         print *, "Number of rows: ",N
          print *, "2-norm of residual vector = ", norm_p(x,2)
          !call print_array(x)
 
@@ -314,6 +326,10 @@ program test
          real (kind=8), allocatable :: wrk(:,:), L(:,:), U(:,:)
          integer (kind=4) :: i
 
+         print *,
+         print *, "Testing lu:"
+         print *, "Number of rows: ",N
+ 
          ! Manual test matrix
          ! {{{
          !allocate(A(5,5))
@@ -349,9 +365,6 @@ program test
          call apply_perm_vector(wrk,p,1)
          wrk = A - wrk ! P*A - L*U
 
-         print *,
-         print *, "Testing lu:"
-         print *, "Number of rows: ",N
          print *, "1 norm of P*A-L*U: ", norm_p(wrk,1)
 
       end subroutine
@@ -365,6 +378,10 @@ program test
          real (kind=8), allocatable :: A(:,:)
          real (kind=8), allocatable :: wrk(:,:), L(:,:), U(:,:)
 
+         print *,
+         print *, "Testing lu_nopp:"
+         print *, "Number of rows: ",N
+ 
          A = 2d0*rand_mat(N,N)-1d0
          wrk = A
 
@@ -376,9 +393,6 @@ program test
          wrk = matmul(L,U)
          wrk = A - wrk ! A - L*U
 
-         print *,
-         print *, "Testing lu_nopp:"
-         print *, "Number of rows: ",N
          print *, "1 norm of A-L*U: ", norm_p(wrk,1)
 
       end subroutine test_lu_nopp
@@ -392,6 +406,10 @@ program test
          real (kind=8), allocatable :: b(:,:), x(:,:)
          integer (kind=4), allocatable :: p(:)
 
+         print *,
+         print *, "Testing fb_solve_lu:"
+         print *, "Number of rows: ",N
+ 
          A = rand_mat(N,N)
          wrk = A
          b = rand_mat(N,1)
@@ -402,9 +420,6 @@ program test
       
          x = matmul(A,x)-b
        
-         print *,
-         print *, "Testing fb_solve_lu:"
-         print *, "Number of rows: ",N
          print *, "2norm of residual vector = ", norm_p(x,2)
          print *, "1 norm condition number = ", condest_lu(A,wrk,p)
          print *, "1 norm relative error = ", condest_lu(A,wrk,p)*norm_p(x,1)/norm_p(b,1)
@@ -426,6 +441,10 @@ program test
 
          !real (kind=8), allocatable :: R(:,:), Rt(:,:)
 
+         print *,
+         print *, "Testing fb_solve_blk_lu:"
+         print *, "Number of rows: ",N
+ 
          A = 2d0*rand_mat(N,N)-1d0
          wrk = A
          b = rand_mat(N,1)
@@ -436,9 +455,6 @@ program test
       
          x = matmul(A,x)-b
        
-         print *,
-         print *, "Testing fb_solve_blk_lu:"
-         print *, "Number of rows: ",N
          print *, "2 norm of residual vector = ", norm_p(x,2)
          print *, "1 norm condition number = ", condest_lu(A,wrk,p)
          print *, "1 norm relative error = ", condest_lu(A,wrk,p)*norm_p(x,1)/norm_p(b,1)
@@ -458,6 +474,9 @@ program test
          integer (kind=4), allocatable :: p(:)
          !integer (kind=4) :: i
 
+         print *,
+         print *, "Testing condest_lu:"
+ 
          ! test matrix
          ! K(A) = 1197.
          allocate(A(2,2))
@@ -475,8 +494,6 @@ program test
          !p = (/ (i,i=1,N) /)
          !call lu(wrk,p)
 
-         print *,
-         print *, "Testing condest_lu:"
          print *, "Condition number should be 1197"
          print *, condest_lu(A,wrk,p)
 
@@ -488,9 +505,14 @@ program test
          ! {{{ 
          integer (kind=4), intent(in) :: Nr,Nc
          real (kind=8), allocatable :: A(:,:), Q(:,:), R(:,:) 
-         real (kind=8), allocatable :: wrk(:,:), wrk2(:,:), x(:,:), b(:), b2(:)
+         real (kind=8), allocatable :: wrk(:,:), wrk2(:,:)
 
          real (kind=8) :: t_0, t_1
+
+         print *,
+         print *, "Testing qr:"
+         print *, "Size: ",Nr,"x ",Nc
+ 
 
          ! Manual test matrix
          ! {{{
@@ -544,15 +566,16 @@ program test
          !wrk = A-matmul(Q,R)
          wrk2 = A
          call dgemm('N','N',Nr,Nc,Nr,-1d0,Q,Nr,R,Nr,1d0,wrk2,Nr)
-         print *,
-         print *, "Testing qr:"
-         print *, "Size: ",Nr,"x ",Nc
          print *, "qr time: ",t_1-t_0," CPU seconds"
          print *, "1 norm of A-Q*R: ", norm_p(wrk2,1)
 
          !b2 = b
          !wrk = A
 
+         print *,
+         print *, "Testing qr_blas:"
+         print *, "Size: ",Nr,"x ",Nc
+ 
          wrk = A
          call cpu_time(t_0)
          !call qr_blas(wrk,b)
@@ -568,9 +591,6 @@ program test
          !!wrk = A-matmul(Q,R)
          wrk2 = A
          call dgemm('N','N',Nr,Nc,Nr,-1d0,Q,Nr,R,Nr,1d0,wrk2,Nr)
-         print *,
-         print *, "Testing qr_blas:"
-         print *, "Size: ",Nr,"x ",Nc
          print *, "qr_blas time: ",t_1-t_0," CPU seconds"
          print *, "1 norm of A-Q*R: ", norm_p(wrk2,1)
 
@@ -593,6 +613,10 @@ program test
 
          real (kind=8) :: t_0, t_1
 
+         print *, 
+         print *, "Timing dgemm:"
+         print *, "Number of rows (SQUARE): ",N
+ 
          A = 2d0*rand_mat(N,N)-1d0
          wrk = A
 
@@ -600,14 +624,12 @@ program test
          call dgemm('N','N',N,N,N,1d0,A,N,A,N,1d0,wrk,N)
          call cpu_time(t_1)
 
-         ! This is for ATLAS LAPACK v. openBLAS LAPACK 
-         print *, 
-         print *, "Timing dgemm:"
-         print *, "Number of rows (SQUARE): ",N
+         ! This is for ATLAS LAPACK v. openBLAS LAPACK v. etc
          print *, "dgemm time: ",t_1-t_0," CPU seconds"
    
       end subroutine time_dgemm
       ! }}}
+
 
       subroutine save_stuff(savefile,vec,array)
       ! {{{
@@ -628,17 +650,25 @@ program test
       end subroutine save_stuff
       ! }}}
 
-
       subroutine test_save_stuff(N)
       ! {{{
          integer (kind=4), intent(in) :: N
 
          real (kind=8), allocatable :: vec(:),array(:,:)
 
+         print *,
+         print *, "Testing HDF5:"
+ 
          array = rand_mat(N,N)
          vec = array(:,1)
 
          call save_stuff("save_stuff.h5",vec,array)
+
+         print *, "Executing: octave --quiet --eval ""load(''save_stuff.h5'');array,transpose(vec)"""
+         ! /usr/bin/sh has the following quotes (and more)
+         !  ' - strong quote: print with '' in Fortran
+         !  " - weak quote: print with "" in Fortran
+         call execute_command_line("''octave --quiet --eval ""load('save_stuff.h5');array,transpose(vec)""")
 
       end subroutine test_save_stuff
       ! }}}
