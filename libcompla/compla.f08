@@ -12,7 +12,12 @@
 ! wrap lib in module so it interfaces properly
 module compla
 
+   use HDF5 ! save stuff
+
    implicit none
+
+   integer, parameter :: intk = kind(1)
+   integer, parameter :: dblk = kind(1d0) ! TODO 4->intk, 8->dblk
 
    real (kind=8), parameter :: ZERO_TOL = 10**(-14)
 
@@ -24,6 +29,18 @@ module compla
       module procedure norm_p_mat, norm_p_vec
    end interface
 
+   public write_dset
+   private dwrite_dset_rank1, iwrite_dset_rank1,&
+           dwrite_dset_rank2, dwrite_dset_rank0
+
+   interface write_dset
+      module procedure dwrite_dset_rank1, iwrite_dset_rank1,&
+                       dwrite_dset_rank2, dwrite_dset_rank0
+   end interface write_dset
+
+
+
+   ! BLAS
    integer, external :: idamax
 
    contains
@@ -1396,6 +1413,85 @@ module compla
    end subroutine init_random_seed
    ! }}}
 
+
+   !!!!!!!!
+   ! HDF5 !
+   !!!!!!!!
+   ! {{{
+
+   ! These routines make the dspace, dset, and write data
+   ! they all interface to the 'write_dset' generic routine
+   subroutine dwrite_dset_rank0(file_id, scalar, dsetname)
+      integer (kind=intk) :: file_id
+      real (kind=dblk) :: scalar
+      character (len=*) :: dsetname
+
+      integer (kind=intk) :: dspace_id, dset_id, h5error
+      integer (kind=HSIZE_T) :: dims(1)
+
+      dims(1) = 0
+      call h5screate_simple_f(0,dims,dspace_id,h5error)
+      call h5dcreate_f(file_id,dsetname,H5T_NATIVE_DOUBLE,dspace_id,dset_id,h5error)
+      call h5dwrite_f(dset_id,H5T_NATIVE_DOUBLE,scalar,dims,h5error)
+      call h5dclose_f(dset_id,h5error)
+      call h5sclose_f(dspace_id,h5error)
+
+   end subroutine dwrite_dset_rank0
+
+   subroutine dwrite_dset_rank1(file_id, array, dsetname)
+      integer (kind=intk) :: file_id
+      real (kind=8) :: array(:)
+      character (len=*) :: dsetname
+
+      integer (kind=4) :: dspace_id, dset_id, h5error
+      integer (kind=HSIZE_T) :: dims(1)
+
+      dims(1) = size(array)
+      call h5screate_simple_f(1,dims,dspace_id,h5error)
+      call h5dcreate_f(file_id,dsetname,H5T_NATIVE_DOUBLE,dspace_id,dset_id,h5error)
+      call h5dwrite_f(dset_id,H5T_NATIVE_DOUBLE,array,dims,h5error)
+      call h5dclose_f(dset_id,h5error)
+      call h5sclose_f(dspace_id,h5error)
+
+   end subroutine dwrite_dset_rank1
+
+   subroutine iwrite_dset_rank1(file_id, array, dsetname)
+      integer (kind=intk) :: file_id
+      integer (kind=intk) :: array(:)
+      character (len=*) :: dsetname
+
+      integer (kind=intk) :: dspace_id, dset_id, h5error
+      integer (kind=HSIZE_T) :: dims(1)
+
+      dims(1) = size(array)
+      call h5screate_simple_f(1,dims,dspace_id,h5error)
+      call h5dcreate_f(file_id,dsetname,H5T_NATIVE_INTEGER,dspace_id,dset_id,h5error)
+      call h5dwrite_f(dset_id,H5T_NATIVE_INTEGER,array,dims,h5error)
+      call h5dclose_f(dset_id,h5error)
+      call h5sclose_f(dspace_id,h5error)
+
+   end subroutine iwrite_dset_rank1
+
+
+   subroutine dwrite_dset_rank2(file_id, array, dsetname)
+      integer (kind=intk) :: file_id
+      real (kind=dblk) :: array(:,:)
+      character (len=*) :: dsetname
+
+      integer (kind=intk) :: dspace_id, dset_id, h5error
+      integer (kind=HSIZE_T) :: dims(2)
+
+      dims(1) = size(array,1); dims(2) = size(array,2)
+      call h5screate_simple_f(2,dims,dspace_id,h5error)
+      call h5dcreate_f(file_id,dsetname,H5T_NATIVE_DOUBLE,dspace_id,dset_id,h5error)
+      call h5dwrite_f(dset_id,H5T_NATIVE_DOUBLE,array,dims,h5error)
+      call h5dclose_f(dset_id,h5error)
+      call h5sclose_f(dspace_id,h5error)
+   
+      end subroutine dwrite_dset_rank2
+ 
+
+   ! }}}
 
 end module compla
 
