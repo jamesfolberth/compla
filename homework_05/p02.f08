@@ -334,7 +334,31 @@ program p03
    
             ! multiple deflations (take them one at a time)
             elseif ( definds_len > 1 ) then
-               stop('I cant let you do that, Dave')
+               if ( PRINT_MSGS ) then 
+                  print *, 'deflate multiple (pre-iter, start): ',definds(1)+1
+               end if
+   
+               def_len = def_len + 1
+               deflates(def_len) = definds(1)+1
+               call francis2(A,deflates,def_len,n1,definds(1))
+   
+               do i=2,definds_len
+                  if ( Print_MSGS ) then
+                     print *, 'deflate multiple (pre-iter, mid): ',definds(i)+1
+                  end if
+   
+                  def_len = def_len + 1
+                  deflates(def_len) = definds(i)+1
+                  call francis2(A,deflates,def_len,definds(i-1)+1,definds(i))
+               end do
+               
+               if ( PRINT_MSGS ) then
+                  print *, 'deflate multiple (pre-iter, end): ',&
+                     definds(definds_len)+1
+               end if
+               call francis2(A,deflates,def_len,definds(definds_len)+1,n2)
+                  
+               return ! done with n1:n2
             end if
 
             ! deflate the bottom
