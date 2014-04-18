@@ -1,6 +1,7 @@
 *.o
 *.so
 *.mod
+*.h5
 libcompla/test
 test/main
 homework_02/p03

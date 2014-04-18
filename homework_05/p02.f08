@@ -1,47 +1,55 @@
-program p03
+! p02.f08
 
-   ! TODO handle the case where two shifts are right next to each other
+program p02
 
-   use compla
+   use compla ! this lib has a bunch of stuff I wrote throughout the semester
+      ! stuff from libcompla: intk,dblk,diag,write_dset,print_vector/array
+   use HDF5 ! to save data and read into GNU Octave
+      ! stuff like h5* is from HDF5
+
+   ! BLAS calls
+   ! drotg,drot
    
    implicit none
 
-   integer (kind=4) :: n,i
-   real (kind=8), allocatable :: A(:,:), Lambda(:)
+   integer (kind=intk) :: n,i
+   real (kind=dblk), allocatable :: A(:,:), Lambda(:)
 
    n = 6
-   n = 10
+   !n = 10
    n = 50
    allocate(A(n,n))
    allocate(Lambda(n))
 
    ! build A
-   A = 0d0
+   A = 0_dblk
    do i=1,n-1
-      A(i+1,i) = 1.0d0
-      A(i,i) = 2.0d0
-      A(i,i+1) = 1.0d0
+      A(i+1,i) = 1.0_dblk
+      A(i,i) = 2.0_dblk
+      A(i,i+1) = 1.0_dblk
    end do
-   A(n,n) = 2.0d0
+   A(n,n) = 2.0_dblk
 
    A(4,3) = 0; A(3,4) = 0
    A(6,5) = 0; A(5,6) = 0
-   !A(7,6) = 0; A(6,7) = 0 ! TODO handle this
+   A(7,6) = 0; A(6,7) = 0 
    A(34,33) = 0; A(33,34) = 0
-   !A(35,34) = 0; A(34,35) = 0 ! TODO handle this too (prolly just do an iter)
-   !A(36,35) = 0; A(35,36) = 0
-   !call print_array(A)
+   A(35,34) = 0; A(34,35) = 0
+   A(36,35) = 0; A(35,36) = 0
 
-   ! compute evals of A
+   ! compute evals of A (Francis 1)
    !Lambda = 0d0
    !call francis1(A,Lambda)
    !call print_vector(Lambda)
 
-   ! compute evals of A
-   Lambda = 0d0
+   ! compute evals of A (Francis 2)
+   Lambda = 0_dblk
    call francis2_driver(A,Lambda)
    call print_vector(Lambda)
-   
+
+   call save_stuff("data.h5",A,Lambda)
+   print *, "data saved to ","data.h5"
+
    deallocate(A,Lambda)
 
    contains
@@ -49,11 +57,11 @@ program p03
       ! Francis algo (deg 1, sym-tridiag, various shifts, somewhat deflated)
       subroutine francis1(A,Lambda)
          ! {{{
-         real (kind = 8), intent(inout) :: A(:,:), Lambda(:)
+         real (kind=dblk), intent(inout) :: A(:,:), Lambda(:)
          logical :: PRINT_MSGS = .true.
 
-         integer (kind=4) :: i,iter,n,ldA
-         real (kind=8) :: shift,cs,sn,rotg_r,rotg_z
+         integer (kind=intk) :: i,iter,n,ldA
+         real (kind=dblk) :: shift,cs,sn,rotg_r,rotg_z
 
          ldA = size(A,1)
          n = size(A,1) ! note that n will decrease as we deflate from the
@@ -83,7 +91,7 @@ program p03
                call drotg(rotg_r,rotg_z,cs,sn)
                ! note that drotg overwrites the first two entries
                A(i+1,i) = rotg_r
-               A(i+2,i) = 0.0d0
+               A(i+2,i) = 0.0_dblk
                call drot(n-i,A(i+1,i+1),ldA,A(i+2,i+1),ldA,cs,sn)
                call drot(ldA,A(1,i+1),1,A(1,i+2),1,cs,sn)
             end do chase
@@ -116,10 +124,10 @@ program p03
       ! Francis algo driver (def 1, sym-tridiag, various shifts, deflated)
       subroutine francis2_driver(A,Lambda)
          ! {{{
-         real (kind=8), intent(inout) :: A(:,:), Lambda(:)
+         real (kind=dblk), intent(inout) :: A(:,:), Lambda(:)
 
-         integer (kind=4), allocatable :: deflates(:)
-         integer (kind=4) :: def_len,n1,n2
+         integer (kind=intk), allocatable :: deflates(:)
+         integer (kind=intk) :: def_len,n1,n2
 
          n1 = 1
          n2 = size(A,1)
@@ -138,22 +146,22 @@ program p03
       ! Francis algo (def 1, sym-tridiag, various shifts, deflated) 
       recursive subroutine francis2(A,deflates,def_len,n1in,n2in)
          ! {{{
-         real (kind=8), intent(inout) :: A(:,:)
-         integer (kind=4), intent(inout) :: deflates(:),def_len
-         integer (kind=4), intent(in) :: n1in,n2in
+         real (kind=dblk), intent(inout) :: A(:,:)
+         integer (kind=intk), intent(inout) :: deflates(:),def_len
+         integer (kind=intk), intent(in) :: n1in,n2in
 
          logical :: PRINT_MSGS = .true.
 
          ! Deflate vars
-         real (kind=8), allocatable :: maind(:),subd(:)
-         real (kind=8) :: htr,dscr,det,root1,root2
+         real (kind=dblk), allocatable :: maind(:),subd(:)
+         real (kind=dblk) :: htr,dscr,det,root1,root2
 
-         integer (kind=4), allocatable :: definds(:)
-         integer (kind=4) :: iter,i,definds_len,n1,n2
+         integer (kind=intk), allocatable :: definds(:)
+         integer (kind=intk) :: iter,i,definds_len,n1,n2
 
          ! Francis iter vars
-         integer (kind=4) :: ldA
-         real (kind=8) :: shift,cs,sn,rotg_r,rotg_z
+         integer (kind=intk) :: ldA
+         real (kind=dblk) :: shift,cs,sn,rotg_r,rotg_z
 
          ldA = size(A,1)
          n1 = n1in
@@ -161,8 +169,8 @@ program p03
 
          !! down to a 2x2 case; compute evals explicitly
          if ( n2 - n1 == 1 ) then
-            htr = 0.5d0*(A(n1,n1)+A(n2,n2)) ! half trace
-            dscr = hypot(0.5d0*(A(n1,n1)-A(n2,n2)),A(n2,n1)) ! descriminant
+            htr = 0.5_dblk*(A(n1,n1)+A(n2,n2)) ! half trace
+            dscr = hypot(0.5_dblk*(A(n1,n1)-A(n2,n2)),A(n2,n1)) ! descriminant
    
             if ( htr < ZERO_TOL ) then
                dscr = -dscr ! avoids cancellation
@@ -170,14 +178,14 @@ program p03
    
             root1 = htr+dscr ! quadradic formula, in terms of tr and det
             if ( abs(root1) < ZERO_TOL ) then
-               root2 = 0d0
+               root2 = 0_dblk
             else
                det = A(n1,n1)*A(n2,n2)-A(n2,n1)**2
                root2 = det/root1 ! det = root1*root2
             end if
 
             A(n1,n1) = root1; A(n2,n2) = root2
-            A(n1,n2) = 0d0; A(n2,n1) = 0d0
+            A(n1,n2) = 0_dblk; A(n2,n1) = 0_dblk
 
             deflates(def_len+1) = n1
             deflates(def_len+2) = n2
@@ -199,15 +207,27 @@ program p03
             ! if okay to deflate and haven't deflated
             if ( subd(i) < epsilon(1d0)*(maind(i)+maind(i+1)) &
                .and. count(i==deflates)==0 ) then
-               !subd(i) = 1 ! found one, overwrite subdiag vec 
-               definds_len = definds_len + 1
-               definds(definds_len) = i
-            else
-               !subd(i) = 0
+              
+               ! if adjacent deflations, don't deflate top one yet (we'll 
+               !get it (when we deflate the end)
+               if ( definds_len > 0 ) then
+                  if ( definds(definds_len) == i-1 ) then
+                     definds(definds_len) = i
+               
+                  ! non-adjacent deflations
+                  else
+                     definds_len = definds_len + 1
+                     definds(definds_len) = i
+                  end if
+               else
+                  definds_len = definds_len + 1
+                  definds(definds_len) = i
+               end if
             end if
          end do
 
          !call print_vector(dble(definds(1:definds_len)))
+         !stop('stuff')
 
          ! single deflation
          if ( definds_len == 1 ) then
@@ -271,6 +291,7 @@ program p03
          iterate: do iter=1,max(2000,5*(n2-n1))
 
             ! compute shift
+            !print *, "pre-shift",n1,n2
             shift = shift_wilk(A,n2)
             
             ! create bulge
@@ -291,7 +312,7 @@ program p03
                call drotg(rotg_r,rotg_z,cs,sn)
                ! note that drotg overwrites the first two entries
                A(i+1,i) = rotg_r
-               A(i+2,i) = 0.0d0
+               A(i+2,i) = 0.0_dblk
                call drot(n2-i,A(i+1,i+1),ldA,A(i+2,i+1),ldA,cs,sn)
                call drot(ldA,A(1,i+1),1,A(1,i+2),1,cs,sn)
             end do chase
@@ -308,18 +329,25 @@ program p03
                ! if okay to deflate and haven't deflated
                if ( subd(i) < epsilon(1d0)*(maind(i)+maind(i+1)) &
                   .and. count(i==deflates)==0 ) then
-                  !subd(i) = 1 ! found one, overwrite subdiag vec 
-                  definds_len = definds_len + 1
-                  definds(definds_len) = i
-               else
-                  !subd(i) = 0
+                 
+                  ! if adjacent deflations, don't deflate top one yet (we'll 
+                  !get it (when we deflate the end)
+                  if ( definds_len > 0 ) then
+                     if ( definds(definds_len) == i-1 ) then
+                        definds(definds_len) = i
+                  
+                     ! non-adjacent deflations
+                     else
+                        definds_len = definds_len + 1
+                        definds(definds_len) = i
+                     end if
+                  else
+                     definds_len = definds_len + 1
+                     definds(definds_len) = i
+                  end if
                end if
             end do
   
-            !call print_vector(dble(definds(1:definds_len)))
-            !print *, definds(1:definds_len)
-            !stop('stuff')
-   
             ! single deflation
             if ( definds_len == 1 ) then
                if ( PRINT_MSGS ) then 
@@ -370,10 +398,11 @@ program p03
 
                def_len = def_len + 1
                deflates(def_len) = n2
-               n2 = n2 - 1
+               n2  = n2 - 1
               
                ! down to 2x2 case
                if ( n2 - n1 == 1 ) then
+                  !print *, n1,n2
                   call francis2(A,deflates,def_len,n1,n2)
                   return
                end if
@@ -393,14 +422,14 @@ program p03
       ! Wilkinson shift
       function shift_wilk(A,n)
          ! {{{
-         real (kind=8), intent(in) :: A(:,:)
-         integer (kind=4), intent(in) :: n
-         real (kind=8) :: shift_wilk
+         real (kind=dblk), intent(in) :: A(:,:)
+         integer (kind=intk), intent(in) :: n
+         real (kind=dblk) :: shift_wilk
 
-         real (kind=8) :: htr,dscr,det,root1,root2
+         real (kind=dblk) :: htr,dscr,det,root1,root2
          
-         htr = 0.5d0*(A(n-1,n-1)+A(n,n)) ! half trace
-         dscr = hypot(0.5d0*(A(n-1,n-1)-A(n,n)),A(n,n-1)) ! descriminant
+         htr = 0.5_dblk*(A(n-1,n-1)+A(n,n)) ! half trace
+         dscr = hypot(0.5_dblk*(A(n-1,n-1)-A(n,n)),A(n,n-1)) ! descriminant
 
          if ( htr < ZERO_TOL ) then
             dscr = -dscr ! avoids cancellation
@@ -408,7 +437,7 @@ program p03
 
          root1 = htr+dscr ! quadradic formula, in terms of tr and det
          if ( abs(root1) < ZERO_TOL ) then
-            root2 = 0d0
+            root2 = 0_dblk
          else
             det = A(n-1,n-1)*A(n,n)-A(n,n-1)**2
             root2 = det/root1 ! det = root1*root2
@@ -425,15 +454,34 @@ program p03
       ! Rayleigh shift
       function shift_ray(A,n)
          ! {{{
-         real (kind=8), intent(in) :: A(:,:)
-         real (kind=8) :: shift_ray
-         integer (kind=4), intent(in) :: n
+         real (kind=dblk), intent(in) :: A(:,:)
+         real (kind=dblk) :: shift_ray
+         integer (kind=intk), intent(in) :: n
 
          shift_ray = A(n,n)
          ! }}}
       end function shift_ray
 
-end program p03
+      ! save a A,Lambda in the top dir of HDF5 file
+      subroutine save_stuff(savefile,A,Lambda)
+         ! {{{
+         character (len=*), intent(in) :: savefile
+         real (kind=dblk), intent(in) :: A(:,:),Lambda(:)
+
+         integer (kind=intk) :: h5error, file_id
+
+         call h5open_f(h5error)
+         call h5fcreate_f(savefile, H5F_ACC_TRUNC_F, file_id, h5error)
+         
+         call write_dset(file_id, A, "A")
+         call write_dset(file_id, Lambda, "Lambda")
+
+         call h5fclose_f(file_id,h5error)
+         call h5close_f(h5error)
+         ! }}}
+      end subroutine save_stuff
+
+end program p02
 
 ! vim: set ts=3 sw=3 sts=3 et :
 ! vim: foldmarker={{{,}}}
