@@ -37,6 +37,9 @@ program test
 
    ! Time dgemm from whichever BLAS implementation you linked with
    !call time_dgemm(5000)
+
+   ! Test saving data to HDF5 file
+   !call test_save_stuff(100)
  
   
    ! {{{
@@ -604,6 +607,40 @@ program test
          print *, "dgemm time: ",t_1-t_0," CPU seconds"
    
       end subroutine time_dgemm
+      ! }}}
+
+      subroutine save_stuff(savefile,vec,array)
+      ! {{{
+         character (len=*) :: savefile
+         real (kind=8) :: vec(:),array(:,:)
+
+         integer (kind=intk) :: h5error, file_id
+   
+         call h5open_f(h5error)
+         call h5fcreate_f(savefile, H5F_ACC_TRUNC_F, file_id, h5error)
+
+         call write_dset(file_id, vec, "vec")
+         call write_dset(file_id, array, "array")
+
+         call h5fclose_f(file_id,h5error)
+         call h5close_f(h5error)
+
+      end subroutine save_stuff
+      ! }}}
+
+
+      subroutine test_save_stuff(N)
+      ! {{{
+         integer (kind=4), intent(in) :: N
+
+         real (kind=8), allocatable :: vec(:),array(:,:)
+
+         array = rand_mat(N,N)
+         vec = array(:,1)
+
+         call save_stuff("save_stuff.h5",vec,array)
+
+      end subroutine test_save_stuff
       ! }}}
 
 
