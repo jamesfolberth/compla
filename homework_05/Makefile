@@ -4,7 +4,7 @@
 FORT=gfortran
 AR=ar
 
-FORTOPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -O2
+FORTOPTS= -Wall -Wextra -fbounds-check -funroll-loops -finline -ffast-math -O2
 
 LDLIBS= -lsatlas -lcompla
 INC= -I/usr/include/libcompla

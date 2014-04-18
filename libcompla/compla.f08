@@ -12,6 +12,8 @@
 ! wrap lib in module so it interfaces properly
 module compla
 
+   implicit none
+
    real (kind=8), parameter :: ZERO_TOL = 10**(-14)
 
    ! p-norm function overload
@@ -21,6 +23,8 @@ module compla
    interface norm_p
       module procedure norm_p_mat, norm_p_vec
    end interface
+
+   integer, external :: idamax
 
    contains
 
@@ -1219,9 +1223,11 @@ module compla
       print *,"Elapsed time is ",time," seconds."
    end subroutine toc
    
-   ! print a rank 2 allocatable array
+   ! print a rank 2  array
    subroutine print_array(A)
       real (kind=8), intent(in) :: A(:,:)
+
+      integer (kind=4) :: i,j
       character (len=30) :: rowfmt
    
       write(rowfmt, "(A,I4,A)") "(",size(A,2),"(1X,SS,10Es13.4))"
@@ -1231,7 +1237,18 @@ module compla
       end do row_print
    end subroutine print_array
 
-   
+   ! print a rand 1 array
+   subroutine print_vector(A)
+      real (kind=8), intent(in) :: A(:)
+
+      integer (kind=4) :: i
+
+      print *,
+      row_print: do i=1,size(A,1)
+         write(*, fmt="(1X,SS,10Es13.4)") A(i)
+      end do row_print
+   end subroutine print_vector
+
    function eye(Nr,Nc)
       integer (kind=4), intent(in) :: Nr,Nc
       real (kind=8), allocatable :: eye(:,:)
@@ -1245,6 +1262,35 @@ module compla
       end do
 
    end function eye
+
+   ! k-th subdiagonal of A
+   function diag(A,kin)
+      real (kind=8), intent(in) :: A(:,:)
+      integer (kind=4), intent(in), optional :: kin
+      real (kind=8), allocatable :: diag(:)
+
+      integer (kind=4) :: m,n,i,k
+      m = size(A,1); n = size(A,2)
+
+      if ( present(kin) ) then
+         k = kin
+      else
+         k = 0
+      end if
+
+      allocate(diag(min(m-abs(k),n-abs(k))))
+
+      if ( k >= 0 ) then
+         do i=1,min(m-abs(k),n-abs(k))
+            diag(i) = A(i+k,i)
+         end do
+      else
+         do i=1,min(m-abs(k),n-abs(k))
+            diag(i) = A(i,i-k)
+         end do
+      end if
+
+   end function diag
 
    function rand_mat(Nr,Nc)
       integer (kind=4), intent(in) :: Nr, Nc

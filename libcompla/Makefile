@@ -5,7 +5,7 @@ FORT=gfortran
 AR=ar
 
 #FORTOPTS= -Wall -Wextra -fbounds-check 
-FORTOPTS= -Wall -fbounds-check -funroll-loops -finline -ffast-math -march=native -mtune=native -O2
+FORTOPTS= -Wall -Wextra -fbounds-check -funroll-loops -finline -ffast-math -march=native -mtune=native -O2
 #FORTOPTS= -Wall -O3
 
 LDLIBS= -lsatlas
