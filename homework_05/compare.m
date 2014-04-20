@@ -10,6 +10,7 @@ function [] = compare(savefile)
    Lambda = transpose(Lambda);
 
    [e] = eig(A);
+   abs(sort(e)(2)-sort(Lambda)(2)) % difference between 0.7... eval
    norm(sort(Lambda)-sort(e),inf) % same evals <=> small
 
 end

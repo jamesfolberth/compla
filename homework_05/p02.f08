@@ -13,12 +13,12 @@ program p02
    implicit none
 
    integer (kind=intk) :: n,i
-   real (kind=dblk), allocatable :: A(:,:), Lambda(:)
+   real (kind=dblk), allocatable :: A(:,:),A_save(:,:),Lambda(:)
 
    n = 6
    !n = 10
-   n = 50
-   allocate(A(n,n))
+   !n = 50
+   allocate(A(n,n),A_save(n,n))
    allocate(Lambda(n))
 
    ! build A
@@ -29,100 +29,30 @@ program p02
       A(i,i+1) = 1.0_dblk
    end do
    A(n,n) = 2.0_dblk
+   A_save = A
 
-   A(4,3) = 0; A(3,4) = 0
-   A(6,5) = 0; A(5,6) = 0
-   A(7,6) = 0; A(6,7) = 0 
-   A(34,33) = 0; A(33,34) = 0
-   A(35,34) = 0; A(34,35) = 0
-   A(36,35) = 0; A(35,36) = 0
-
-   ! compute evals of A (Francis 1)
-   !Lambda = 0d0
-   !call francis1(A,Lambda)
-   !call print_vector(Lambda)
+   ! Testing deflation (these tests pass)
+   !A(4,3) = 0; A(3,4) = 0
+   !A(6,5) = 0; A(5,6) = 0
+   !A(7,6) = 0; A(6,7) = 0 
+   !A(34,33) = 0; A(33,34) = 0
+   !A(35,34) = 0; A(34,35) = 0
+   !A(36,35) = 0; A(35,36) = 0
 
    ! compute evals of A (Francis 2)
    Lambda = 0_dblk
-   call francis2_driver(A,Lambda)
+   call francis_driver(A,Lambda)
    call print_vector(Lambda)
 
-   call save_stuff("data.h5",A,Lambda)
+   call save_stuff("data.h5",A_save,Lambda)
    print *, "data saved to ","data.h5"
 
    deallocate(A,Lambda)
 
    contains
 
-      ! Francis algo (deg 1, sym-tridiag, various shifts, somewhat deflated)
-      subroutine francis1(A,Lambda)
-         ! {{{
-         real (kind=dblk), intent(inout) :: A(:,:), Lambda(:)
-         logical :: PRINT_MSGS = .true.
-
-         integer (kind=intk) :: i,iter,n,ldA
-         real (kind=dblk) :: shift,cs,sn,rotg_r,rotg_z
-
-         ldA = size(A,1)
-         n = size(A,1) ! note that n will decrease as we deflate from the
-                       ! from the bottom right on up, but ldA (leading dim A)
-                       ! will be fixed (needed for dgem*)
-
-         iterate: do iter=1,max(2000,5*n)
-            
-            ! compute shift
-            shift = shift_wilk(A,n)
-            
-            ! create bulge
-            ! http://www.netlib.org/lapack/explore-html/de/d13/drotg_8f_source.html
-            rotg_r = A(1,1) - shift
-            rotg_z = A(2,1)
-            call drotg(rotg_r,rotg_z,cs,sn) ! drotg changes the
-            ! input da,db -> rotg_r,rotg_z.  these are the vec norm and
-            ! something else. see the source at netlib.org (note I'm using
-            ! ATLAS, not netlib LAPACK)
-            call drot(ldA,A(1,1),ldA,A(2,1),ldA,cs,sn)
-            call drot(ldA,A(1,1),1,A(1,2),1,cs,sn)
-
-            ! chase bulge
-            chase: do i=1,n-2
-               rotg_r = A(i+1,i)
-               rotg_z = A(i+2,i)
-               call drotg(rotg_r,rotg_z,cs,sn)
-               ! note that drotg overwrites the first two entries
-               A(i+1,i) = rotg_r
-               A(i+2,i) = 0.0_dblk
-               call drot(n-i,A(i+1,i+1),ldA,A(i+2,i+1),ldA,cs,sn)
-               call drot(ldA,A(1,i+1),1,A(1,i+2),1,cs,sn)
-            end do chase
-
-            ! attempt to deflate lower right entry
-            if ( abs(A(n,n-1)) < epsilon(1.0d0)* &
-                  (abs(A(n-1,n-1))+abs(A(n,n))) ) then
-               ! we can deflate, so trim off bottom row and right col
-               n = n-1
-               if ( n == 1 ) then
-                  if ( PRINT_MSGS ) then
-                     print *, "number of iterations = ",iter
-                  end if
-
-                  !do i=1,ldA
-                  !   Lambda(i) = A(i,i)
-                  !end do
-                  Lambda = diag(A)
-                  return
-               end if
-            end if
-
-         end do iterate
-
-         stop('p02.f08: francis1: we have done too many iterations')
-
-         ! }}}
-      end subroutine francis1
-
       ! Francis algo driver (def 1, sym-tridiag, various shifts, deflated)
-      subroutine francis2_driver(A,Lambda)
+      subroutine francis_driver(A,Lambda)
          ! {{{
          real (kind=dblk), intent(inout) :: A(:,:), Lambda(:)
 
@@ -135,16 +65,16 @@ program p02
          allocate(deflates(size(A,1)))
          deflates = 0
 
-         call francis2(A,deflates,def_len,n1,n2)
+         call francis(A,deflates,def_len,n1,n2)
 
          Lambda = diag(A)
 
          deallocate(deflates)
          ! }}}
-      end subroutine francis2_driver
+      end subroutine francis_driver
 
       ! Francis algo (def 1, sym-tridiag, various shifts, deflated) 
-      recursive subroutine francis2(A,deflates,def_len,n1in,n2in)
+      recursive subroutine francis(A,deflates,def_len,n1in,n2in)
          ! {{{
          real (kind=dblk), intent(inout) :: A(:,:)
          integer (kind=intk), intent(inout) :: deflates(:),def_len
@@ -237,8 +167,9 @@ program p02
 
             def_len = def_len + 1
             deflates(def_len) = definds(1)+1
-            call francis2(A,deflates,def_len,n1,definds(1))
-            call francis2(A,deflates,def_len,definds(1)+1,n2)
+            call francis(A,deflates,def_len,n1,definds(1))
+            call francis(A,deflates,def_len,definds(1)+1,n2)
+            deallocate(maind,subd,definds)
             return ! done with n1:n2
 
          ! multiple deflations (take them one at a time)
@@ -249,7 +180,7 @@ program p02
 
             def_len = def_len + 1
             deflates(def_len) = definds(1)+1
-            call francis2(A,deflates,def_len,n1,definds(1))
+            call francis(A,deflates,def_len,n1,definds(1))
 
             do i=2,definds_len
                if ( Print_MSGS ) then
@@ -258,20 +189,21 @@ program p02
 
                def_len = def_len + 1
                deflates(def_len) = definds(i)+1
-               call francis2(A,deflates,def_len,definds(i-1)+1,definds(i))
+               call francis(A,deflates,def_len,definds(i-1)+1,definds(i))
             end do
             
             if ( PRINT_MSGS ) then
                print *, 'deflate multiple (pre-iter, end): ',&
                   definds(definds_len)+1
             end if
-            call francis2(A,deflates,def_len,definds(definds_len)+1,n2)
+            call francis(A,deflates,def_len,definds(definds_len)+1,n2)
                
+            deallocate(maind,subd,definds)
             return ! done with n1:n2
          end if
 
          ! deflate the bottom (separate check)
-         ! in case the francis2 calls above already deflate this,
+         ! in case the francis calls above already deflate this,
          ! don't try to do it again
          if ( abs(A(n2,n2-1)) < epsilon(1d0)*&
             (abs(A(n2-1,n2-1))+abs(A(n2,n2)))&
@@ -282,7 +214,8 @@ program p02
 
             def_len = def_len + 1
             deflates(def_len) = n2
-            call francis2(A,deflates,def_len,n1,n2-1)
+            call francis(A,deflates,def_len,n1,n2-1)
+            deallocate(maind,subd,definds)
             return ! done with n1:n2
          end if
 
@@ -291,8 +224,9 @@ program p02
          iterate: do iter=1,max(2000,5*(n2-n1))
 
             ! compute shift
-            !print *, "pre-shift",n1,n2
             shift = shift_wilk(A,n2)
+            !shift = shift_ray(A,n2)
+            !shift = 0_dblk
             
             ! create bulge
             ! http://www.netlib.org/lapack/explore-html/de/d13/drotg_8f_source.html
@@ -356,8 +290,9 @@ program p02
    
                def_len = def_len + 1
                deflates(def_len) = definds(1)+1
-               call francis2(A,deflates,def_len,n1,definds(1))
-               call francis2(A,deflates,def_len,definds(1)+1,n2)
+               call francis(A,deflates,def_len,n1,definds(1))
+               call francis(A,deflates,def_len,definds(1)+1,n2)
+               deallocate(maind,subd,definds)
                return ! done with n1:n2
    
             ! multiple deflations (take them one at a time)
@@ -368,7 +303,7 @@ program p02
    
                def_len = def_len + 1
                deflates(def_len) = definds(1)+1
-               call francis2(A,deflates,def_len,n1,definds(1))
+               call francis(A,deflates,def_len,n1,definds(1))
    
                do i=2,definds_len
                   if ( Print_MSGS ) then
@@ -377,24 +312,30 @@ program p02
    
                   def_len = def_len + 1
                   deflates(def_len) = definds(i)+1
-                  call francis2(A,deflates,def_len,definds(i-1)+1,definds(i))
+                  call francis(A,deflates,def_len,definds(i-1)+1,definds(i))
                end do
                
                if ( PRINT_MSGS ) then
                   print *, 'deflate multiple (pre-iter, end): ',&
                      definds(definds_len)+1
                end if
-               call francis2(A,deflates,def_len,definds(definds_len)+1,n2)
+               call francis(A,deflates,def_len,definds(definds_len)+1,n2)
                   
+               deallocate(maind,subd,definds)
                return ! done with n1:n2
             end if
+
+            print *, "abs(A(n,n-1)),A(n,n): ",abs(A(n2,n2-1)),A(n2,n2)
 
             ! deflate the bottom
             if ( abs(A(n2,n2-1)) < epsilon(1d0)*&
                (abs(A(n2-1,n2-1))+abs(A(n2,n2))) ) then
               
                ! trim off the bottom row and rightmost col
-               if ( PRINT_MSGS ) print *, "deflate end (mid-iter): ",n2
+               if ( PRINT_MSGS ) then
+                  print *, "deflate end (mid-iter): ",n2
+                  print *, "  num iter (cuml): ",iter
+               end if
 
                def_len = def_len + 1
                deflates(def_len) = n2
@@ -403,21 +344,22 @@ program p02
                ! down to 2x2 case
                if ( n2 - n1 == 1 ) then
                   !print *, n1,n2
-                  call francis2(A,deflates,def_len,n1,n2)
+                  call francis(A,deflates,def_len,n1,n2)
+
+                  deallocate(maind,subd,definds)
                   return
                end if
-               !call francis2(A,deflates,def_len,n1,n2-1)
+               !call francis(A,deflates,def_len,n1,n2-1)
                !return ! done with n1:n2
             end if
 
          end do iterate
 
-         
-         deallocate(maind,subd)
-         deallocate(definds)
+         ! TODO if we make it down here, we're toast
+         deallocate(maind,subd,definds)
 
          ! }}}
-      end subroutine francis2
+      end subroutine francis
 
       ! Wilkinson shift
       function shift_wilk(A,n)

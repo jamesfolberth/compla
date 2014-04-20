@@ -3,7 +3,6 @@
 ! James Folberth - Spring 2014
 
 ! TODO make `block_size` global (separate block sizes per algorithm)
-! TODO make (kind=8) statements something smarter (i.e portable)
 ! TODO make BLAS (ATLAS) calls where possible
 ! TODO overload print_array to print vectors as well
 ! TODO make vector 2-norm-squared function for QR decomp
